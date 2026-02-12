@@ -46,6 +46,7 @@ class TwelveLabsUploadAsset(GriptapeProxyNode):
                 ui_options={"display_name": "Video"},
             ),
             disclaimer_message="The TwelveLabs service utilizes this URL to access the video for upload.",
+            request_timeout=60.0,
         )
         self._public_video_url_parameter.add_input_parameters()
 

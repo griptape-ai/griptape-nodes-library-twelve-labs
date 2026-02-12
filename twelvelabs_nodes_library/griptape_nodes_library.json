@@ -68,6 +68,17 @@
       }
     },
     {
+      "class_name": "TwelveLabsIngestVideos",
+      "file_path": "twelvelabs_ingest_videos.py",
+      "metadata": {
+        "category": "video",
+        "description": "Create an index, upload one or more videos, and index uploaded assets",
+        "display_name": "TwelveLabs Ingest Videos",
+        "icon": "workflow",
+        "group": "create"
+      }
+    },
+    {
       "class_name": "TwelveLabsSearchIndex",
       "file_path": "twelvelabs_search_index.py",
       "metadata": {
