@@ -4,10 +4,11 @@ import time
 import uuid
 from typing import Any, ClassVar
 
-from griptape_nodes.exe_types.core_types import ParameterMode
+from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.exe_types.param_types.parameter_bool import ParameterBool
 from griptape_nodes.exe_types.param_types.parameter_dict import ParameterDict
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
+from griptape_nodes.traits.options import Options
 try:
     from .griptape_proxy_node import GriptapeProxyNode
 except ImportError:
@@ -29,43 +30,34 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
             "Model configuration is fixed after index creation."
         )
 
-        # Available model families in TwelveLabs v1.3 create-index API.
+        # Select one model per family (or leave a family empty).
         self.add_parameter(
-            ParameterBool(
-                name="use_marengo_3_0",
-                default_value=True,
+            Parameter(
+                name="marengo_model_name",
+                type="str",
+                default_value="marengo3.0",
                 tooltip=(
-                    "Embedding model for search and classification tasks. "
-                    "Enable this for stronger semantic retrieval and broader video understanding."
+                    "Marengo embedding model family for search/classification. "
+                    "Choose one version, or leave empty to disable Marengo for this index."
                 ),
                 allowed_modes={ParameterMode.INPUT, ParameterMode.PROPERTY},
-                ui_options={"display_name": "Use Marengo 3.0"},
+                traits={Options(choices=["", "marengo3.0", "marengo2.7"])},
+                ui_options={"display_name": "Marengo Model"},
             )
         )
 
         self.add_parameter(
-            ParameterBool(
-                name="use_marengo_2_7",
-                default_value=False,
+            Parameter(
+                name="pegasus_model_name",
+                type="str",
+                default_value="pegasus1.2",
                 tooltip=(
-                    "Embedding model focused on multimodal search. "
-                    "Enable if you need compatibility with marengo2.7 behavior."
+                    "Pegasus generative model family for contextual text output. "
+                    "Choose one version, or leave empty to disable Pegasus for this index."
                 ),
                 allowed_modes={ParameterMode.INPUT, ParameterMode.PROPERTY},
-                ui_options={"display_name": "Use Marengo 2.7"},
-            )
-        )
-
-        self.add_parameter(
-            ParameterBool(
-                name="use_pegasus_1_2",
-                default_value=True,
-                tooltip=(
-                    "Generative model that analyzes multiple modalities and returns contextual text. "
-                    "Enable this for richer descriptive/generative outputs."
-                ),
-                allowed_modes={ParameterMode.INPUT, ParameterMode.PROPERTY},
-                ui_options={"display_name": "Use Pegasus 1.2"},
+                traits={Options(choices=["", "pegasus1.2"])},
+                ui_options={"display_name": "Pegasus Model"},
             )
         )
 
@@ -147,11 +139,9 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
     def validate_before_node_run(self) -> list[Exception] | None:
         exceptions = super().validate_before_node_run() or []
 
-        selected_models = [
-            bool(self.get_parameter_value("use_marengo_3_0")),
-            bool(self.get_parameter_value("use_marengo_2_7")),
-            bool(self.get_parameter_value("use_pegasus_1_2")),
-        ]
+        marengo_model_name = (self.get_parameter_value("marengo_model_name") or "").strip()
+        pegasus_model_name = (self.get_parameter_value("pegasus_model_name") or "").strip()
+        selected_models = [marengo_model_name, pegasus_model_name]
         if not any(selected_models):
             exceptions.append(ValueError(f"{self.name}: At least one model must be enabled."))
 
@@ -163,9 +153,7 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
             exceptions.append(ValueError(f"{self.name}: At least one model option must be enabled."))
 
         addons_csv = (self.get_parameter_value("addons_csv") or "").strip()
-        marengo_enabled = bool(self.get_parameter_value("use_marengo_3_0")) or bool(
-            self.get_parameter_value("use_marengo_2_7")
-        )
+        marengo_enabled = bool(marengo_model_name)
         if addons_csv and not marengo_enabled:
             exceptions.append(ValueError(f"{self.name}: addons require a Marengo model to be enabled."))
 
@@ -182,13 +170,14 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
             msg = "At least one model option must be enabled."
             raise ValueError(msg)
 
+        marengo_model_name = (self.get_parameter_value("marengo_model_name") or "").strip()
+        pegasus_model_name = (self.get_parameter_value("pegasus_model_name") or "").strip()
+
         models: list[dict[str, Any]] = []
-        if bool(self.get_parameter_value("use_marengo_3_0")):
-            models.append({"name": "marengo3.0", "options": model_options})
-        if bool(self.get_parameter_value("use_marengo_2_7")):
-            models.append({"name": "marengo2.7", "options": model_options})
-        if bool(self.get_parameter_value("use_pegasus_1_2")):
-            models.append({"name": "pegasus1.2", "options": model_options})
+        if marengo_model_name:
+            models.append({"model_name": marengo_model_name, "model_options": model_options})
+        if pegasus_model_name:
+            models.append({"model_name": pegasus_model_name, "model_options": model_options})
 
         if not models:
             msg = "At least one model must be enabled."
@@ -206,7 +195,7 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
         if addons_csv:
             addons = [part.strip() for part in addons_csv.split(",") if part.strip()]
             if addons:
-                marengo_enabled = any(m["name"].startswith("marengo") for m in models)
+                marengo_enabled = any(m["model_name"].startswith("marengo") for m in models)
                 if not marengo_enabled:
                     msg = "addons require at least one Marengo model"
                     raise ValueError(msg)
