@@ -10,7 +10,7 @@ class OpenAIChat(ControlNode):
     def __init__(self, name: str, metadata: dict[str, Any] | None = None, **kwargs) -> None:
         node_metadata = {
             "category": "ControlNodes",
-            "description": "An example node with dependencies"
+            "description": "A node with dependencies"
         }
         if metadata:
             node_metadata.update(metadata)

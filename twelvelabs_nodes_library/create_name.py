@@ -7,7 +7,7 @@ class CreateName(DataNode):
     def __init__(self, name: str, metadata: dict[str, Any] | None = None, **kwargs) -> None:
         node_metadata = {
             "category": "DataNodes",
-            "description": "An example node with dependencies"
+            "description": "A node with dependencies"
         }
         if metadata:
             node_metadata.update(metadata)

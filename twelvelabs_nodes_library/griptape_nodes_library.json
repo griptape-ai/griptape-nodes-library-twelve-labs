@@ -1,0 +1,93 @@
+{
+  "name": "TwelveLabs Nodes Library",
+  "library_schema_version": "0.5.0",
+  "settings": [
+    {
+      "description": "API keys required by nodes in this library",
+      "category": "app_events.on_app_initialization_complete",
+      "contents": {
+        "secrets_to_register": [
+          "GT_CLOUD_API_KEY"
+        ]
+      }
+    }
+  ],
+  "metadata": {
+    "author": "Griptape, Inc",
+    "description": "TwelveLabs nodes via Griptape Cloud proxy",
+    "library_version": "0.1.0",
+    "engine_version": "0.73.0",
+    "tags": [
+      "Griptape",
+      "AI",
+      "TwelveLabs"
+    ]
+  },
+  "categories": [
+    {
+      "video": {
+        "color": "border-red-500",
+        "title": "Video",
+        "description": "Video understanding and search nodes",
+        "icon": "file-video"
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "class_name": "TwelveLabsCreateIndex",
+      "file_path": "twelvelabs_create_index.py",
+      "metadata": {
+        "category": "video",
+        "description": "Create a TwelveLabs index and return the created index ID",
+        "display_name": "TwelveLabs Create Index",
+        "icon": "folder-plus",
+        "group": "create"
+      }
+    },
+    {
+      "class_name": "TwelveLabsUploadAsset",
+      "file_path": "twelvelabs_upload_asset.py",
+      "metadata": {
+        "category": "video",
+        "description": "Upload a video to a TwelveLabs index and return the asset ID",
+        "display_name": "TwelveLabs Upload Asset",
+        "icon": "upload",
+        "group": "create"
+      }
+    },
+    {
+      "class_name": "TwelveLabsIndexAsset",
+      "file_path": "twelvelabs_index_asset.py",
+      "metadata": {
+        "category": "video",
+        "description": "Index an uploaded TwelveLabs asset and return the indexed video ID",
+        "display_name": "TwelveLabs Index Asset",
+        "icon": "list-checks",
+        "group": "create"
+      }
+    },
+    {
+      "class_name": "TwelveLabsSearchIndex",
+      "file_path": "twelvelabs_search_index.py",
+      "metadata": {
+        "category": "video",
+        "description": "Search a TwelveLabs index using text queries",
+        "display_name": "TwelveLabs Search Index",
+        "icon": "search",
+        "group": "describe"
+      }
+    },
+    {
+      "class_name": "TwelveLabsAnalyzeVideo",
+      "file_path": "twelvelabs_analyze_video.py",
+      "metadata": {
+        "category": "video",
+        "description": "Run open-ended analysis for an indexed TwelveLabs video",
+        "display_name": "TwelveLabs Analyze Video",
+        "icon": "message-square-text",
+        "group": "describe"
+      }
+    }
+  ]
+}

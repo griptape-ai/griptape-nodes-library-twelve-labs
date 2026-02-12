@@ -13,7 +13,7 @@ The [Griptape Nodes Developer Onboarding Guide](https://docs.griptapenodes.com/e
 
 - A beginner-friendly introduction to the Griptape Nodes ecosystem
 - Guidance on choosing the right base node type (`DataNode`, `ControlNode`, `SuccessFailureNode`)
-- Minimal working examples to get started quickly
+- Minimal working patterns to get started quickly
 - Practical information on parameters, traits, and validation
 - Common gotchas and troubleshooting tips
 
@@ -24,10 +24,10 @@ The [Node Development Guide](https://github.com/griptape-ai/griptape-nodes-node-
 - In-depth technical reference material
 - Detailed documentation on node base classes and lifecycle callbacks
 - Advanced patterns for async operations
-- Comprehensive examples of parameter types and traits
+- Comprehensive coverage of parameter types and traits
 - Best practices for UI/UX and error handling
 
-These resources complement the examples in this template and provide the full context you need to build production-quality custom nodes.
+These resources complement the nodes in this repository and provide the full context you need to build production-quality custom nodes.
 
 ## Use this Template
 
@@ -57,7 +57,7 @@ Once you've created your own repository from this template, you need to pull it 
 
 To create your node library and make it importable by other users, please follow the steps below.
 
-1. rename `example_nodes_template` to the name of your library.
+1. Use `twelvelabs_nodes_library` as your package directory name (or rename it if you are creating a derivative library).
 2. Update the `pyproject.toml`:
    ```
    [project]
@@ -73,15 +73,15 @@ Next, we'll create the nodes that will live in your library.
 
 Each node is it's own python file, written in pure python code!
 
-To create nodes for your library, please take a look at our provided examples in the `example_nodes_template` library and follow the steps below.
+To create nodes for your library, please take a look at the provided nodes in the `twelvelabs_nodes_library` library and follow the steps below.
 
-**Example Nodes:**
+**Included Nodes:**
 
-- [Age Node (DataNode)](example_nodes_template/age_node.py) - Simple data processing node with numeric input
-- [Create Introduction (ControlNode)](example_nodes_template/create_introduction.py) - Control flow node for text processing
-- [Create Name Node](example_nodes_template/create_name.py) - Basic string manipulation node
-- [OpenAI Chat (ControlNode with Dependencies)](example_nodes_template/openai_chat.py) - Advanced node with external API integration
-- [Pig Latin -Converter](example_nodes_template/pig_latin.py) - Text transformation example
+- [Age Node (DataNode)](twelvelabs_nodes_library/age_node.py) - Simple data processing node with numeric input
+- [Create Introduction (ControlNode)](twelvelabs_nodes_library/create_introduction.py) - Control flow node for text processing
+- [Create Name Node](twelvelabs_nodes_library/create_name.py) - Basic string manipulation node
+- [OpenAI Chat (ControlNode with Dependencies)](twelvelabs_nodes_library/openai_chat.py) - Advanced node with external API integration
+- [Pig Latin -Converter](twelvelabs_nodes_library/pig_latin.py) - Text transformation node
 
 ## 📝 Creating Your Nodes
 
@@ -163,7 +163,7 @@ Nodes have additional methods that can provide functionality at or before runtim
 def validate_node(self) -> list[Exception] | None:
         """Method called to check that all dependencies, like API keys or models, exist in the environment before running the workflow.
         The default behavior is to return None. Custom Nodes that have dependencies will overwrite this method in order to return exceptions if the environment isn't set.
-        For example, a node that uses an OpenAI API Key will check that it is set in the environment and that the key is valid.
+        For instance, a node that uses an OpenAI API Key will check that it is set in the environment and that the key is valid.
 
         Returns:
             A list of exceptions if any arise, or None. The user can define their own custom exceptions, or use provided python exceptions.
@@ -608,11 +608,11 @@ images = self.get_parameter_list_value("images")  # Always returns list
 
 3. **Verify installation** by checking that your custom nodes appear in the Griptape Nodes interface in your defined category.
 
-## 🎯 Example Usage
+## 🎯 Usage
 
-### Here is an example flow that you could make with the provided nodes:
+### Here is a reference flow you could make with the provided nodes:
 
-![Example Flow](./images/example_flow.png)
+![TwelveLabs Flow](./images/twelvelabs_flow.png)
 
 ## 🔍 Troubleshooting
 
@@ -642,14 +642,14 @@ images = self.get_parameter_list_value("images")  # Always returns list
 
 - [Griptape Nodes Documentation](https://github.com/griptape-ai/griptape-nodes)
 - [Griptape Framework](https://github.com/griptape-ai/griptape)
-- [Node Development Examples](example_nodes_template/)
+- [Node Library Source](twelvelabs_nodes_library/)
 
 ### Community
 
 - [Griptape Discord](https://discord.gg/griptape)
 - [GitHub Discussions](https://github.com/griptape-ai/griptape-nodes/discussions)
 
-### Example Libraries
+### Published Libraries
 
 - [Griptape Nodes Directory](https://github.com/griptape-ai/griptape-nodes-directory)
 

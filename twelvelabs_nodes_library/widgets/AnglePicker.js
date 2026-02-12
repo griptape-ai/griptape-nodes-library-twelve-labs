@@ -378,7 +378,7 @@ export default function AnglePicker(container, props) {
           verticalTilt = THREE.MathUtils.clamp(angle / 35, -1, 1);
         }
       } else if (dragTarget.userData.type === 'distance') {
-        // Delta-based for distance (matching original example)
+        // Delta-based for distance (matching original behavior)
         const deltaY = mouse.y - dragStartMouse.y;
         moveForward = THREE.MathUtils.clamp(dragStartValue + deltaY * 12, 0, 10);
       }

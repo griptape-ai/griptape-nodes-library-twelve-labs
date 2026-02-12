@@ -227,7 +227,7 @@ wheels = [
 ]
 
 [[package]]
-name = "example-nodes-template"
+name = "twelvelabs-nodes-library"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
