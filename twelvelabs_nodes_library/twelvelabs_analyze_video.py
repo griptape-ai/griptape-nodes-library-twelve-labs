@@ -106,8 +106,8 @@ class TwelveLabsAnalyzeVideo(GriptapeProxyNode):
                 name="analysis_text",
                 tooltip="Best-effort extracted analysis text",
                 allowed_modes={ParameterMode.OUTPUT},
-                hide_property=True,
                 multiline=True,
+                ui_options={"display_name": "Analysis Text", "multiline": True},
             )
         )
 
