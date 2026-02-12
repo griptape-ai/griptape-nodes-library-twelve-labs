@@ -141,7 +141,6 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
             node=self,
             artifact_url_parameter=video_upload_helper,
             disclaimer_message="The TwelveLabs service utilizes this URL to access the video for upload.",
-            request_timeout=60.0,
         )
 
         self.add_parameter(
