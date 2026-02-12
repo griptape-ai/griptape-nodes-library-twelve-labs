@@ -51,11 +51,11 @@ class TwelveLabsUploadAsset(GriptapeProxyNode):
 
         self.add_parameter(
             ParameterString(
-                name="filename",
-                tooltip="Optional filename override",
+                name="asset_url",
+                tooltip="Public URL of a video asset to upload (use this instead of Video input)",
                 allowed_modes={ParameterMode.INPUT, ParameterMode.PROPERTY},
-                placeholder_text="optional-filename.mp4",
-                ui_options={"display_name": "Filename (Optional)"},
+                placeholder_text="https://example.com/video.mp4",
+                ui_options={"display_name": "Asset URL"},
             )
         )
 
@@ -110,34 +110,41 @@ class TwelveLabsUploadAsset(GriptapeProxyNode):
             exceptions.append(ValueError(f"{self.name}: index_id is required."))
 
         video = self.get_parameter_value("video")
-        if not video:
-            exceptions.append(ValueError(f"{self.name}: video is required."))
+        asset_url = (self.get_parameter_value("asset_url") or "").strip()
+
+        if video and asset_url:
+            exceptions.append(ValueError(f"{self.name}: Provide either video or asset_url, not both."))
+        elif not video and not asset_url:
+            exceptions.append(ValueError(f"{self.name}: Either video or asset_url is required."))
 
         return exceptions if exceptions else None
 
     async def _build_payload(self) -> dict[str, Any]:
         index_id = (self.get_parameter_value("index_id") or "").strip()
-        filename = (self.get_parameter_value("filename") or "").strip()
         video = self.get_parameter_value("video")
+        asset_url = (self.get_parameter_value("asset_url") or "").strip()
 
         if not index_id:
             msg = "index_id is required"
             raise ValueError(msg)
-        if not video:
-            msg = "video is required"
+        if video and asset_url:
+            msg = "Provide either video or asset_url, not both"
+            raise ValueError(msg)
+        if not video and not asset_url:
+            msg = "Either video or asset_url is required"
             raise ValueError(msg)
 
-        public_video_url = self._public_video_url_parameter.get_public_url_for_parameter()
-        if not public_video_url:
-            msg = "video is required"
-            raise ValueError(msg)
+        upload_url = asset_url
+        if video and not asset_url:
+            upload_url = self._public_video_url_parameter.get_public_url_for_parameter()
+            if not upload_url:
+                msg = "video is required"
+                raise ValueError(msg)
 
         payload: dict[str, Any] = {
             "index_id": index_id,
-            "url": public_video_url,
+            "url": upload_url,
         }
-        if filename:
-            payload["filename"] = filename
         return payload
 
     async def _parse_result(self, result_json: dict[str, Any], _generation_id: str) -> None:
