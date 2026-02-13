@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from contextlib import suppress
 from typing import Any
 
 from griptape.artifacts.url_artifact import UrlArtifact
@@ -141,6 +142,7 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
             node=self,
             artifact_url_parameter=video_upload_helper,
             disclaimer_message="The TwelveLabs service utilizes this URL to access the video for upload.",
+            request_timeout=600.0,
         )
 
         self.add_parameter(
@@ -152,27 +154,27 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
             )
         )
 
-        self.add_parameter(
-            Parameter(
-                name="asset_ids",
-                type="list",
-                output_type="list",
-                tooltip="Uploaded TwelveLabs asset IDs",
-                allowed_modes={ParameterMode.OUTPUT},
-                hide_property=True,
-            )
+        self.asset_ids_list = ParameterList(
+            name="asset_ids",
+            tooltip="Uploaded TwelveLabs asset IDs (one output per uploaded video)",
+            type="str",
+            output_type="str",
+            default_value=[],
+            allowed_modes={ParameterMode.OUTPUT},
+            child_prefix="Asset ID",
         )
+        self.add_parameter(self.asset_ids_list)
 
-        self.add_parameter(
-            Parameter(
-                name="video_ids",
-                type="list",
-                output_type="list",
-                tooltip="Indexed TwelveLabs video IDs",
-                allowed_modes={ParameterMode.OUTPUT},
-                hide_property=True,
-            )
+        self.video_ids_list = ParameterList(
+            name="video_ids",
+            tooltip="Indexed TwelveLabs video IDs (one output per indexed asset)",
+            type="str",
+            output_type="str",
+            default_value=[],
+            allowed_modes={ParameterMode.OUTPUT},
+            child_prefix="Video ID",
         )
+        self.add_parameter(self.video_ids_list)
 
         self.add_parameter(
             ParameterDict(
@@ -206,6 +208,8 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
         self.parameter_output_values["asset_ids"] = []
         self.parameter_output_values["video_ids"] = []
         self.parameter_output_values["provider_response"] = {}
+        self.asset_ids_list.clear_list()
+        self.video_ids_list.clear_list()
 
     def validate_before_node_run(self) -> list[Exception] | None:
         exceptions = super().validate_before_node_run() or []
@@ -264,7 +268,7 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
                 asset_id = self._extract_asset_id(upload_result)
                 asset_ids.append(asset_id)
                 upload_results.append(upload_result)
-                self._public_video_url_parameter.delete_uploaded_artifact()
+                self._cleanup_current_staged_artifact()
 
             video_ids: list[str] = []
             index_results: list[dict[str, Any]] = []
@@ -284,8 +288,8 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
                 video_ids.append(video_id)
                 index_results.append(index_result)
 
-            self.parameter_output_values["asset_ids"] = asset_ids
-            self.parameter_output_values["video_ids"] = video_ids
+            self._set_asset_ids_outputs(asset_ids)
+            self._set_video_ids_outputs(video_ids)
             self.parameter_output_values["provider_response"] = {
                 "create_index": create_result,
                 "uploads": upload_results,
@@ -303,7 +307,7 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
             self._set_status_results(was_successful=False, result_details=str(e))
             self._handle_failure_exception(e)
         finally:
-            self._public_video_url_parameter.delete_uploaded_artifact()
+            self._cleanup_current_staged_artifact()
 
     def _build_create_index_payload(self) -> dict[str, Any]:
         model_options: list[str] = []
@@ -415,3 +419,29 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
             msg = f"{self.name}: failed to convert video input to public URL."
             raise ValueError(msg)
         return public_url
+
+    def _cleanup_current_staged_artifact(self) -> None:
+        with suppress(Exception):
+            self._public_video_url_parameter.delete_uploaded_artifact()
+        # PublicArtifactUrlParameter doesn't clear its internal pointer after delete.
+        # Clear it here so repeated cleanup calls are no-ops instead of 404 deletes.
+        with suppress(Exception):
+            self._public_video_url_parameter.gtc_file_path = None
+
+    def _set_asset_ids_outputs(self, asset_ids: list[str]) -> None:
+        self.asset_ids_list.clear_list()
+        for asset_id in asset_ids:
+            child = self.asset_ids_list.add_child_parameter()
+            self.set_parameter_value(child.name, asset_id)
+            self.publish_update_to_parameter(child.name, asset_id)
+            self.parameter_output_values[child.name] = asset_id
+        self.parameter_output_values["asset_ids"] = asset_ids
+
+    def _set_video_ids_outputs(self, video_ids: list[str]) -> None:
+        self.video_ids_list.clear_list()
+        for video_id in video_ids:
+            child = self.video_ids_list.add_child_parameter()
+            self.set_parameter_value(child.name, video_id)
+            self.publish_update_to_parameter(child.name, video_id)
+            self.parameter_output_values[child.name] = video_id
+        self.parameter_output_values["video_ids"] = video_ids
