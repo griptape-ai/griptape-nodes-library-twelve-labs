@@ -9,6 +9,7 @@ from griptape_nodes.exe_types.param_types.parameter_bool import ParameterBool
 from griptape_nodes.exe_types.param_types.parameter_dict import ParameterDict
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.traits.options import Options
+
 try:
     from .griptape_proxy_node import GriptapeProxyNode
 except ImportError:
@@ -26,8 +27,7 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
         super().__init__(**kwargs)
         self.category = "API Nodes"
         self.description = (
-            "Create a TwelveLabs index via Griptape model proxy. "
-            "Model configuration is fixed after index creation."
+            "Create a TwelveLabs index via Griptape model proxy. Model configuration is fixed after index creation."
         )
 
         # Select one model per family (or leave a family empty).
@@ -67,8 +67,7 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
                 name="visual",
                 default_value=True,
                 tooltip=(
-                    "Include visual frames in model analysis. "
-                    "Disable to ignore image content and analyze audio only."
+                    "Include visual frames in model analysis. Disable to ignore image content and analyze audio only."
                 ),
                 allowed_modes={ParameterMode.INPUT, ParameterMode.PROPERTY},
             )
@@ -78,10 +77,7 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
             ParameterBool(
                 name="audio",
                 default_value=True,
-                tooltip=(
-                    "Include audio track signals in model analysis. "
-                    "Disable to analyze visual content only."
-                ),
+                tooltip=("Include audio track signals in model analysis. Disable to analyze visual content only."),
                 allowed_modes={ParameterMode.INPUT, ParameterMode.PROPERTY},
             )
         )

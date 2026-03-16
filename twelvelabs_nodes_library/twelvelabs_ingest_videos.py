@@ -74,8 +74,7 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
                 name="visual",
                 default_value=True,
                 tooltip=(
-                    "Include visual frames in model analysis. "
-                    "Disable to ignore image content and analyze audio only."
+                    "Include visual frames in model analysis. Disable to ignore image content and analyze audio only."
                 ),
                 allowed_modes={ParameterMode.INPUT, ParameterMode.PROPERTY},
             )
@@ -85,10 +84,7 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
             ParameterBool(
                 name="audio",
                 default_value=True,
-                tooltip=(
-                    "Include audio track signals in model analysis. "
-                    "Disable to analyze visual content only."
-                ),
+                tooltip=("Include audio track signals in model analysis. Disable to analyze visual content only."),
                 allowed_modes={ParameterMode.INPUT, ParameterMode.PROPERTY},
             )
         )
@@ -410,7 +406,11 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
             msg = f"{self.name}: video input must resolve to a non-empty URL or path."
             raise ValueError(msg)
 
-        if isinstance(url_value, str) and url_value.startswith(("http://", "https://")) and "localhost" not in url_value:
+        if (
+            isinstance(url_value, str)
+            and url_value.startswith(("http://", "https://"))
+            and "localhost" not in url_value
+        ):
             return url_value
 
         self.set_parameter_value("video_upload_helper", url_value)
