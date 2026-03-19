@@ -6,6 +6,7 @@ from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.exe_types.param_types.parameter_bool import ParameterBool
 from griptape_nodes.exe_types.param_types.parameter_dict import ParameterDict
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
+
 try:
     from .griptape_proxy_node import GriptapeProxyNode
 except ImportError:

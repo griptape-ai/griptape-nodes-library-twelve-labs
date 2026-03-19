@@ -9,7 +9,6 @@ from typing import Any
 from urllib.parse import urljoin
 
 import httpx
-
 from griptape_nodes.exe_types.node_types import SuccessFailureNode
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes
 
