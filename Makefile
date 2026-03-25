@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 LIBRARY_JSON := twelvelabs_nodes_library/griptape_nodes_library.json
 
 .PHONY: version/get
