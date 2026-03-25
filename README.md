@@ -1,662 +1,353 @@
-# Griptape Nodes: Node Library Template
+# TwelveLabs Nodes Library
 
-Hi! Welcome to Griptape Nodes.
-This is a guide to write your own nodes and node library, in order to use in our [Griptape Nodes](https://www.griptapenodes.com/) platform.
+This repository contains six Griptape nodes for working with TwelveLabs through the Griptape Cloud proxy API.
 
-## Griptape Nodes Node Development Documentation
+The library is built around the core TwelveLabs workflow:
 
-For comprehensive guidance on developing custom nodes, refer to these official resources:
+1. Create an `index`
+2. Upload one or more video `assets`
+3. Index those assets into TwelveLabs `videos`
+4. Run `search` across an index or `analysis` against a specific video
 
-### Official Documentation
+## Terminology
 
-The [Griptape Nodes Developer Onboarding Guide](https://docs.griptapenodes.com/en/latest/how_to/developing_nodes/) provides:
+The naming in the TwelveLabs API can be easy to mix up. In this library, the terms mean:
 
-- A beginner-friendly introduction to the Griptape Nodes ecosystem
-- Guidance on choosing the right base node type (`DataNode`, `ControlNode`, `SuccessFailureNode`)
-- Minimal working patterns to get started quickly
-- Practical information on parameters, traits, and validation
-- Common gotchas and troubleshooting tips
+- `index`: A logical collection of videos. The index is configured up front with model families and modalities, and that configuration is fixed after creation.
+- `asset`: A video file that has been uploaded to TwelveLabs, but is not necessarily processed for retrieval or analysis yet.
+- `video`: The TwelveLabs video resource produced after an uploaded asset is indexed. This is the ID used for analysis.
+- `search`: A query across the videos inside an index.
+- `analysis`: A prompt against one specific indexed video.
 
-### Node Development Guide Repository
+## Common Behavior
 
-The [Node Development Guide](https://github.com/griptape-ai/griptape-nodes-node-development-guide) offers:
+All six nodes share the same backend pattern:
 
-- In-depth technical reference material
-- Detailed documentation on node base classes and lifecycle callbacks
-- Advanced patterns for async operations
-- Comprehensive coverage of parameter types and traits
-- Best practices for UI/UX and error handling
+- They call the Griptape Cloud proxy API, not TwelveLabs directly.
+- They require the `GT_CLOUD_API_KEY` secret to be configured in Griptape.
+- They submit an async generation, poll until completion, then fetch the final result.
+- Polling is configured for up to 10 minutes by default.
 
-These resources complement the nodes in this repository and provide the full context you need to build production-quality custom nodes.
+## Setup
 
-## Use this Template
+To use these nodes in Griptape:
 
-Create your own repository using this GitHub Template. Use the Template button in the top right.
+1. Add the library manifest at `twelvelabs_nodes_library/griptape_nodes_library.json`.
+2. Ensure the `GT_CLOUD_API_KEY` secret is set.
+3. Drag nodes to your workflow canvas and create connections.
 
-Once you've created your own repository from this template, you need to pull it down to your local machine, or the machine where you are running your Griptape Nodes Engine.
+The library metadata registers `GT_CLOUD_API_KEY` as the required secret for this package.
 
-> **Hint**: It's recommended to clone this repository into your Griptape Nodes workspace directory. You can find your workspace directory by running:
->
-> ```bash
-> gtn config show workspace_directory
-> ```
->
-> Here's a quick way to navigate to your workspace directory:
->
-> ```bash
-> cd `gtn config show workspace_directory`
-> ```
->
-> Finally, clone the repository:
->
-> ```bash
-> git clone https://github.com/{{ .RepoName }}.git
-> ```
+## Node Overview
 
-## 🏗️ Setup Your Library
+There are two main ways to use the library.
 
-To create your node library and make it importable by other users, please follow the steps below.
+### Option 1: One-node ingest flow
 
-1. Use `twelvelabs_nodes_library` as your package directory name (or rename it if you are creating a derivative library).
-2. Update the `pyproject.toml`:
-   ```
-   [project]
-   name = "<your-library-name>"
-   version = "0.1.0"
-   description = "<your-description>"
-   authors = [
-       {name = "<Your-Name>",email = "<you@example.com>"}
-   ]
-   ```
+Use `TwelveLabs Ingest Videos` when you want one node to:
 
-Next, we'll create the nodes that will live in your library.
+1. create an index
+2. upload one or more videos
+3. index each uploaded asset
 
-Each node is it's own python file, written in pure python code!
+Outputs:
 
-To create nodes for your library, please take a look at the provided nodes in the `twelvelabs_nodes_library` library and follow the steps below.
+- `index_id`
+- `asset_ids`
+- `video_ids`
 
-**Included Nodes:**
+### Option 2: Composed flow
 
-- [Age Node (DataNode)](twelvelabs_nodes_library/age_node.py) - Simple data processing node with numeric input
-- [Create Introduction (ControlNode)](twelvelabs_nodes_library/create_introduction.py) - Control flow node for text processing
-- [Create Name Node](twelvelabs_nodes_library/create_name.py) - Basic string manipulation node
-- [OpenAI Chat (ControlNode with Dependencies)](twelvelabs_nodes_library/openai_chat.py) - Advanced node with external API integration
-- [Pig Latin -Converter](twelvelabs_nodes_library/pig_latin.py) - Text transformation node
+Use the nodes individually when you want more control:
 
-## 📝 Creating Your Nodes
+1. `TwelveLabs Create Index`
+2. `TwelveLabs Upload Asset`
+3. `TwelveLabs Index Asset`
+4. `TwelveLabs Search Index` or `TwelveLabs Analyze Video`
 
-### Define a file with your node name
+## Recommended Data Flow
 
-Define a `<your-node-name>.py` file in your `<your-library-name>` directory.
+### Search-oriented flow
 
-### Define the Node Class
+`Create Index` -> `Upload Asset` -> `Index Asset` -> `Search Index`
 
-There are two different types of Nodes that you could choose to define.
+### Video-specific analysis flow
 
-1. **ControlNode**
-   Has Parameters that allow for configuring a control flow. They create the main path of the flow upon run.
-2. **DataNode**
-   Solely has parameters that define and create data values. They can be dependencies of nodes on the main flow, but don't have control inputs/outputs.
-   _You can add ControlParameters to a DataNode if desired to give it the functionality of a ControlNode._
+`Create Index` -> `Upload Asset` -> `Index Asset` -> `Analyze Video`
 
-Within your `<your-node-name>.py`.
-Add this import at the top of your file and define your Node or Nodes as a class.
+### Batch ingest flow
 
-```
-from griptape_nodes.exe_types.node_types import ControlNode, DataNode
-from griptape_nodes.exe_types.core_types import Parameter
+`Ingest Videos` -> `Search Index` or `Analyze Video`
 
-# Creating a Control Node
-class <YourNodeName>(ControlNode):
-    pass
+## Node Reference
 
-# Creating a Data Node
-class <YourNodeName>(DataNode):
-    pass
-```
+### TwelveLabs Ingest Videos
 
-### Initialize your Node and define your Parameters
+Display name: `TwelveLabs Ingest Videos`
 
-Parameters are fields on the node that can be connected to other nodes or set by the user.
-Parameters have many fields that can be configured for their desired behavior.
-Only a couple of the fields are mandatory. The rest are optional.
+Purpose:
+Create a new TwelveLabs index, upload one or more videos, then index each uploaded asset in sequence.
 
-### Parameter Fields
+Inputs:
 
-1. name: `str` The name of the parameter. Must be unique to the node.
-2. tooltip: `str | list[dict]` The description that will appear upon hovering the mouse.
-3. type: `str` _OPTIONAL_ The type of the value in the parameter. If not defined, it will be whatever the python type is.
-4. input*types: `list[str]` \_OPTIONAL* The allowed list of types that can be connected as an INPUT to your parameter.
-5. output*type: `str` \_OPTIONAL* The type that the OUTPUT of your parameter will be.
-6. default*value: Any \_OPTIONAL* A default value for your parameter if it isn't set
-7. tooltip*as_input: `str | list[dict]` \_OPTIONAL* Tooltip on the input port
-8. tooltip*as_property: `str | list[dict]` \_OPTIONAL* Tooltip on the property displapy
-9. tooltip*as_output: `str | list[dict]` \_OPTIONAL* Tooltip on the output port
-10. allowed*modes: `set[ParameterMode]`
-    \_OPTIONAL* The allowed modes.
-    `ParameterMode.INPUT`: Accepts inputs
-    `ParameterMode.OUTPUT`: Sends output
-    `ParameterMode.PROPERTY`: Can be set on the node itself.
-11. ui*options: `dict` \_OPTIONAL* Informs the display of your node.
-12. traits: `set[type[Trait] | Trait]` _OPTIONAL_ Reusable classes that define features on a parameter, including converters and UI options. They are inheritable!
-13. converters: `list[Callable[[Any], Any]]` _OPTIONAL_ Modifies the parameter value after being set if needed.
-14. validators: `list[Callable[[Parameter, Any], None]]` _OPTIONAL_ Validates that the value on the parameter is correct.
-
-### Define Node Method
-
-Nodes have one absolute method that _absolutely_ (haha) must be defined.
-This is the method that is called by the node at runtime when a node executes.
-It completes the function of your node, whether thats creating a string, generating an image, or creating an agent.
-
-```
-def process(self) -> None:
-    pass
-```
-
-### Additional Optional Methods
-
-Nodes have additional methods that can provide functionality at or before runtime (and you can define as many helper functions as you'd like.)
-
-1. Validate Node
-
-```
-def validate_node(self) -> list[Exception] | None:
-        """Method called to check that all dependencies, like API keys or models, exist in the environment before running the workflow.
-        The default behavior is to return None. Custom Nodes that have dependencies will overwrite this method in order to return exceptions if the environment isn't set.
-        For instance, a node that uses an OpenAI API Key will check that it is set in the environment and that the key is valid.
-
-        Returns:
-            A list of exceptions if any arise, or None. The user can define their own custom exceptions, or use provided python exceptions.
-        """
-```
-
-2. Before setting a value on a parameter
-
-```
-def before_value_set(self, parameter: Parameter, value: Any) -> Any:
-    """Callback when a Parameter's value is ABOUT to be set.
-
-        Custom nodes may elect to override the default behavior by implementing this function in their node code.
-
-        This gives the node an opportunity to perform custom logic before a parameter is set. This may result in:
-        * Further mutating the value that would be assigned to the Parameter
-        * Mutating other Parameters or state within the Node
-
-        If other Parameters are changed, the engine needs a list of which
-        ones have changed to cascade unresolved state.
-
-        Args:
-            parameter: the Parameter on this node that is about to be changed
-            value: the value intended to be set (this has already gone through any converters and validators on the Parameter)
-
-        Returns:
-            The final value to set for the Parameter. This gives the Node logic one last opportunity to mutate the value
-            before it is assigned.
-        """
-```
-
-3. After setting a value on a parameter
-
-```
-def after_value_set(self, parameter: Parameter, value: Any) -> None:
-        """Callback AFTER a Parameter's value was set.
-
-        Custom nodes may elect to override the default behavior by implementing this function in their node code.
-
-        This gives the node an opportunity to perform custom logic after a parameter is set. This may result in
-        changing other Parameters on the node. If other Parameters are changed, the engine needs a list of which
-        ones have changed to cascade unresolved state.
-
-        Args:
-            parameter: the Parameter on this node that was just changed
-            value: the value that was set (already converted, validated, and possibly mutated by the node code)
-
-        Returns:
-            Nothing
-        """
-```
-
-4. Checking if a connections to the node are allowed.
-   The default value is true, but Custom nodes can implement this method however they'd like to control connections.
-
-```
-def allow_incoming_connection(
-        self,
-        source_node: Self,
-        source_parameter: Parameter,
-        target_parameter: Parameter,
-    ) -> bool:
-        """Callback to confirm allowing a Connection coming TO this Node.
-        """
-        return True
-```
-
-```
-def allow_outgoing_connection(
-        self,
-        source_parameter: Parameter,  # noqa: ARG002
-        target_node: Self,  # noqa: ARG002
-        target_parameter: Parameter,  # noqa: ARG002
-    ) -> bool:
-        """Callback to confirm allowing a Connection going OUT of this Node."""
-        return True
-```
-
-5. Callbacks AFTER creating or removing a connection
-
-```
-def after_incoming_connection(
-        self,
-        source_node: Self,  # noqa: ARG002
-        source_parameter: Parameter,  # noqa: ARG002
-        target_parameter: Parameter,  # noqa: ARG002
-    ) -> None:
-        """Callback after a Connection has been established TO this Node."""
-        return
-```
-
-```
-def after_outgoing_connection(
-        self,
-        source_parameter: Parameter,  # noqa: ARG002
-        target_node: Self,  # noqa: ARG002
-        target_parameter: Parameter,  # noqa: ARG002
-    ) -> None:
-        """Callback after a Connection has been established OUT of this Node."""
-        return
-
-```
-
-```
-def after_incoming_connection_removed(
-        self,
-        source_node: Self,  # noqa: ARG002
-        source_parameter: Parameter,  # noqa: ARG002
-        target_parameter: Parameter,  # noqa: ARG002
-    ) -> None:
-        """Callback after a Connection TO this Node was REMOVED."""
-        return
-```
-
-```
-def after_outgoing_connection_removed(
-        self,
-        source_parameter: Parameter,  # noqa: ARG002
-        target_node: Self,  # noqa: ARG002
-        target_parameter: Parameter,  # noqa: ARG002
-    ) -> None:
-        """Callback after a Connection OUT of this Node was REMOVED."""
-        return
-```
-
-## 📋 Library Configuration
-
-### Create your library JSON file
-
-This configuration file defines your library metadata, dependencies, and nodes. It will be loaded by the Griptape Nodes engine at runtime.
-
-```
-{
-    "name": "<Your-Library-Name>",
-    "library_schema_version": "0.3.0",
-    "metadata": {
-        "author": "<Your-Name>",
-        "description": "<Your Description>",
-        "library_version": "0.1.0",
-        "engine_version": "0.60.0",
-        "tags": [
-            "Griptape",
-            "AI",
-            "<Your-Category>"
-        ],
-        "dependencies": {
-            "pip_dependencies": [
-                // Add any Python packages your nodes require
-                // "requests>=2.25.0",
-                // "pillow>=8.0.0"
-            ]
-        }
-    },
-    "settings": [
-        {
-            "description": "API keys required by nodes in this library",
-            "category": "app_events.on_app_initialization_complete",
-            "contents": {
-                "secrets_to_register": [
-                    // Add any API keys your nodes need
-                    // "YOUR_API_KEY"
-                ]
-            }
-        }
-    ],
-    "categories": [
-        {
-            "<your-category-id>": {
-                "color": "border-blue-500",
-                "title": "<Your Category>",
-                "description": "<Category Description>",
-                "icon": "Folder"
-            }
-        }
-    ],
-    "nodes": [
-        {
-            "class_name": "<YourNodeName>",
-            "file_path": "<your-library-name>/<your-node-name>.py",
-            "metadata": {
-                "category": "<your-category-id>",
-                "description": "<Node Description>",
-                "display_name": "<Your Node Display Name>"
-            }
-        }
-    ]
-}
-```
-
-### Key Configuration Features
-
-#### Dependencies
-
-Add Python packages your nodes require in the `dependencies.pip_dependencies` array. The engine will automatically install these when loading your library.
-
-#### Secrets Management
-
-Use the `settings.secrets_to_register` array to automatically register API keys and secrets your nodes need. Users will be prompted to configure these in the Griptape Nodes settings.
-
-#### Categories
-
-Organize your nodes into logical categories with custom colors and icons. Use descriptive category IDs like `"image/processing"` or `"data/conversion"`.
-
-## 🛠️ Best Practices
-
-### Error Handling
-
-Always implement proper error handling in your nodes:
-
-```python
-def process(self) -> None:
-    try:
-        # Your node logic here
-        result = self.do_something()
-        self.set_parameter_value("output", result)
-    except Exception as e:
-        # Log the error and provide helpful feedback
-        logger.error(f"Node failed: {str(e)}")
-        raise RuntimeError(f"Processing failed: {str(e)}")
-```
-
-### Logging
-
-Use the standard Python logging module for debugging:
-
-```python
-import logging
-
-logger = logging.getLogger(__name__)
-
-def process(self) -> None:
-    logger.debug("Starting processing...")
-    # Your logic here
-    logger.info("Processing completed successfully")
-```
-
-### Input Validation
-
-Validate inputs before processing:
-
-```python
-def validate_before_node_run(self) -> list[Exception] | None:
-    errors = []
-
-    # Check required parameters
-    if not self.get_parameter_value("required_param"):
-        errors.append(ValueError("Required parameter is missing"))
-
-    # Check API keys
-    if not os.getenv("YOUR_API_KEY"):
-        errors.append(ValueError("YOUR_API_KEY environment variable not set"))
-
-    return errors if errors else None
-```
-
-### Modern Parameter Patterns
-
-Use traits and modern parameter features:
-
-```python
-from griptape_nodes.traits.file_system_picker import FileSystemPicker
-from griptape_nodes.traits.options import Options
-from griptape_nodes.traits.slider import Slider
-
-# File picker parameter
-Parameter(
-    name="input_file",
-    type="str",
-    tooltip="Select input file",
-    traits={FileSystemPicker(allow_files=True, file_types=[".txt", ".json"])}
-)
-
-# Dropdown options
-Parameter(
-    name="model_type",
-    type="str",
-    default_value="gpt-4",
-    tooltip="Select model type",
-    traits={Options(choices=["gpt-4", "gpt-3.5-turbo", "claude-3"])}
-)
-
-# Slider for numeric values
-Parameter(
-    name="temperature",
-    type="float",
-    default_value=0.7,
-    tooltip="Creativity level (0.0-2.0)",
-    traits={Slider(min_val=0.0, max_val=2.0)}
-)
-```
-
-### Secrets Management
-
-Use the SecretsManager for API keys:
-
-```python
-from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes
-
-class MyNode(DataNode):
-    API_KEY_NAME = "MY_SERVICE_API_KEY"
-
-    def _validate_api_key(self) -> str:
-        api_key = GriptapeNodes.SecretsManager().get_secret(self.API_KEY_NAME)
-        if not api_key:
-            raise ValueError(f"Missing {self.API_KEY_NAME}")
-        return api_key
-```
-
-### Import Best Practices
-
-Always import dependencies at module level:
-
-```python
-# ✅ Good - Module level imports
-from PIL import Image
-from io import BytesIO
-import requests
-
-# ❌ Bad - Lazy imports inside functions
-def process(self):
-    from PIL import Image  # Don't do this
-```
-
-### Dynamic Parameter Visibility
-
-Create context-aware UIs:
-
-```python
-def after_value_set(self, parameter: Parameter, value: Any) -> None:
-    if parameter.name == "mode":
-        if value == "advanced":
-            self.show_parameter_by_name("advanced_options")
-        else:
-            self.hide_parameter_by_name("advanced_options")
-    return super().after_value_set(parameter, value)
-```
-
-### Success/Failure Node Pattern
-
-For operations that can fail, use SuccessFailureNode:
-
-```python
-from griptape_nodes.exe_types.node_types import SuccessFailureNode
-
-class MyProcessingNode(SuccessFailureNode):
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-
-        # Add status parameters
-        self._create_status_parameters(
-            result_details_tooltip="Details about the operation result",
-            result_details_placeholder="Operation details will appear here.",
-        )
-
-    def process(self) -> None:
-        self._clear_execution_status()
-
-        try:
-            # Your processing logic
-            result = self.do_processing()
-            self.parameter_output_values["output"] = result
-
-            # Success
-            self._set_status_results(
-                was_successful=True,
-                result_details="SUCCESS: Operation completed"
-            )
-        except Exception as e:
-            # Failure
-            self._set_status_results(
-                was_successful=False,
-                result_details=f"FAILURE: {str(e)}"
-            )
-            self._handle_failure_exception(e)
-```
-
-### Asynchronous Processing
-
-For long-running operations, use the async pattern:
-
-```python
-from griptape_nodes.exe_types.node_types import AsyncResult
-
-class MyAsyncNode(DataNode):
-    def process(self) -> AsyncResult[None]:
-        yield lambda: self._process()
-
-    def _process(self) -> None:
-        # Long-running operation
-        result = self.perform_long_operation()
-        self.parameter_output_values["output"] = result
-```
-
-### ParameterList for Multiple Inputs
-
-Accept multiple inputs of the same type:
-
-```python
-from griptape_nodes.exe_types.core_types import ParameterList
-
-self.add_parameter(
-    ParameterList(
-        name="images",
-        input_types=["ImageArtifact", "ImageUrlArtifact", "list[ImageArtifact]"],
-        default_value=[],
-        tooltip="Multiple image inputs",
-        allowed_modes={ParameterMode.INPUT},
-    )
-)
-
-# In process method
-images = self.get_parameter_list_value("images")  # Always returns list
-```
-
-## 📦 Installation
-
-### Prerequisites
-
-- [Griptape Nodes](https://github.com/griptape-ai/griptape-nodes) installed and running
-- Your custom node library created following the steps above
-
-### Install the Library
-
-1. **Download the library files** to your Griptape Nodes libraries directory:
-
-   ```bash
-   # Navigate to your Griptape Nodes libraries directory
-   cd `gtn config show workspace_directory`
-
-   # Clone or download your library
-   git clone https://github.com/your-username/your-library-name.git
-   ```
-
-2. **Add the library** in the Griptape Nodes Editor:
-
-   - Open the Settings menu and navigate to the _Libraries_ settings
-   - Click on _+ Add Library_ at the bottom of the settings panel
-   - Enter the path to the library JSON file: **your Griptape Nodes Workspace directory**`/your-library-name/your-library-name.json`
-   - You can check your workspace directory with `gtn config show workspace_directory`
-   - Close the Settings Panel
-   - Click on _Refresh Libraries_
-
-3. **Verify installation** by checking that your custom nodes appear in the Griptape Nodes interface in your defined category.
-
-## 🎯 Usage
-
-### Here is a reference flow you could make with the provided nodes:
-
-![TwelveLabs Flow](./images/twelvelabs_flow.png)
-
-## 🔍 Troubleshooting
-
-### Common Issues
-
-#### Library Not Appearing
-
-- Verify the JSON file path is correct
-- Check that the JSON syntax is valid (no trailing commas, proper quotes)
-- Ensure the library was refreshed after adding
-
-#### Node Import Errors
-
-- Check that all required dependencies are listed in the JSON
-- Verify Python file paths are correct relative to the JSON file
-- Ensure class names match exactly between Python files and JSON
-
-#### Missing API Keys
-
-- Configure secrets in Settings > API Keys & Secrets
-- Use the exact key names specified in `secrets_to_register`
-- Restart Griptape Nodes after adding new secrets
-
-## 📚 Additional Resources
-
-### Documentation
-
-- [Griptape Nodes Documentation](https://github.com/griptape-ai/griptape-nodes)
-- [Griptape Framework](https://github.com/griptape-ai/griptape)
-- [Node Library Source](twelvelabs_nodes_library/)
-
-### Community
-
-- [Griptape Discord](https://discord.gg/griptape)
-- [GitHub Discussions](https://github.com/griptape-ai/griptape-nodes/discussions)
-
-### Published Libraries
-
-- [Griptape Nodes Directory](https://github.com/griptape-ai/griptape-nodes-directory)
-
-## 📄 License
-
-This template is provided under the Apache License 2.0. Your custom library can use any license you choose.
-
----
-
-Happy building! 🚀
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `marengo_model_name` | string | `marengo3.0` | Optional model family for search/classification. Allowed values: `""`, `marengo3.0`, `marengo2.7`. |
+| `pegasus_model_name` | string | `pegasus1.2` | Optional generative model family. Allowed values: `""`, `pegasus1.2`. |
+| `visual` | boolean | `true` | Include visual frames in model analysis. |
+| `audio` | boolean | `true` | Include audio signals in model analysis. |
+| `addons_csv` | string | empty | Optional comma-separated addons such as `thumbnail`. Requires Marengo to be enabled. |
+| `enable_video_stream` | boolean | `false` | Passed to the asset indexing step. |
+| `videos` | list | `[]` | Accepts one or more video inputs. The node accepts video artifacts, URLs, paths, strings, and lists. Each item is uploaded and then indexed. |
+
+Outputs:
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `index_id` | string | The created TwelveLabs index ID. |
+| `asset_ids` | list[string] | Uploaded asset IDs, one per video. |
+| `video_ids` | list[string] | Indexed TwelveLabs video IDs, one per uploaded asset. |
+| `provider_response` | dict | Aggregate payload with `create_index`, `uploads`, and `indexes`. |
+
+Behavior details:
+
+- The node creates the index first, then uploads videos sequentially, then indexes assets sequentially.
+- Index names are generated automatically as `gt-index-YYYYMMDD-xxxxxxxx`. The name is not user-configurable in the node.
+- If a video input is already a public `http` or `https` URL and does not point to `localhost`, the node passes it through as-is.
+- Otherwise, the node stages the video to a public URL before upload.
+- Dynamic child outputs are created for the individual `asset_ids` and `video_ids`.
+
+Validation rules:
+
+- At least one of `marengo_model_name` or `pegasus_model_name` must be enabled.
+- At least one of `visual` or `audio` must be enabled.
+- `addons_csv` requires a Marengo model.
+- At least one video is required.
+
+Use this node when:
+
+- you want the fastest path from raw video inputs to searchable/analyzable TwelveLabs videos
+- you do not need to reuse an existing index
+
+### TwelveLabs Create Index
+
+Display name: `TwelveLabs Create Index`
+
+Purpose:
+Create a TwelveLabs index and return its ID.
+
+Inputs:
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `marengo_model_name` | string | `marengo3.0` | Optional model family for search/classification. Allowed values: `""`, `marengo3.0`, `marengo2.7`. |
+| `pegasus_model_name` | string | `pegasus1.2` | Optional generative model family. Allowed values: `""`, `pegasus1.2`. |
+| `visual` | boolean | `true` | Include visual frames in the configured model options. |
+| `audio` | boolean | `true` | Include audio in the configured model options. |
+| `addons_csv` | string | empty | Optional comma-separated addons. Requires Marengo. |
+
+Outputs:
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `index_id` | string | The created index ID. |
+| `provider_response` | dict | Raw proxy result payload. |
+| `generation_id` | string | Proxy generation ID. |
+
+Behavior details:
+
+- Model configuration is fixed after the index is created.
+- The node auto-generates an index name internally to avoid collisions.
+- The request payload includes only the model families that are enabled.
+
+Validation rules:
+
+- At least one model must be enabled.
+- At least one model option must be enabled.
+- `addons_csv` requires Marengo.
+
+Use this node when:
+
+- you want to create an index once and then upload/index videos later
+- you need explicit control over the workflow rather than using `Ingest Videos`
+
+### TwelveLabs Upload Asset
+
+Display name: `TwelveLabs Upload Asset`
+
+Purpose:
+Upload a video into an existing TwelveLabs index and return the uploaded asset ID.
+
+Inputs:
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `index_id` | string | empty | Required. Existing TwelveLabs index ID. |
+| `video` | video artifact | empty | Video input to upload. Use this for Griptape video artifacts or local file-backed inputs. |
+| `asset_url` | string | empty | Public URL to the video. Use this instead of `video`. |
+
+Outputs:
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `asset_id` | string | Uploaded TwelveLabs asset ID. |
+| `provider_response` | dict | Raw proxy result payload. |
+| `generation_id` | string | Proxy generation ID. |
+
+Behavior details:
+
+- Exactly one of `video` or `asset_url` must be provided.
+- If `video` is used, the node stages it to a public URL before submitting it to TwelveLabs.
+- The node cleans up the staged artifact after the run.
+- The node extracts the returned asset ID from either the top-level `_id` field or `assets[0]._id`.
+
+Validation rules:
+
+- `index_id` is required.
+- Provide either `video` or `asset_url`, not both.
+- One of `video` or `asset_url` is required.
+
+Use this node when:
+
+- you already have an index
+- you want to upload now and index later
+
+### TwelveLabs Index Asset
+
+Display name: `TwelveLabs Index Asset`
+
+Purpose:
+Convert a previously uploaded asset into an indexed TwelveLabs video resource.
+
+Inputs:
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `index_id` | string | empty | Required. Existing TwelveLabs index ID. |
+| `asset_id` | string | empty | Required. Uploaded asset ID to index. |
+| `enable_video_stream` | boolean | `false` | Enables video stream for the indexed asset. |
+
+Outputs:
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `video_id` | string | Primary indexed TwelveLabs video ID. |
+| `video_ids` | list[string] | Compatibility output for payloads that return multiple indexed IDs. |
+| `provider_response` | dict | Raw proxy result payload. |
+| `generation_id` | string | Proxy generation ID. |
+
+Behavior details:
+
+- In the usual case, one uploaded asset yields one `video_id`.
+- The node also exposes `video_ids` because the proxy result may contain `indexed_asset_ids`.
+- The parser prefers the top-level `_id` and falls back to the first valid ID in `indexed_asset_ids`.
+
+Validation rules:
+
+- `index_id` is required.
+- `asset_id` is required.
+
+Use this node when:
+
+- you want a clear split between upload and indexing
+- you need the TwelveLabs `video_id` for downstream analysis
+
+### TwelveLabs Search Index
+
+Display name: `TwelveLabs Search Index`
+
+Purpose:
+Search across the videos in a TwelveLabs index using a text query.
+
+Inputs:
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `index_id` | string | empty | Required. Existing TwelveLabs index ID. |
+| `query_text` | string | empty | Required. Search prompt or description of what to find. |
+| `search_options_csv` | string | `visual,conversation` | Comma-separated search options. The node converts this to a list before submission. |
+| `page_limit` | integer | `10` | Maximum results to return. Range: `1` to `100`. |
+
+Outputs:
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `search_results` | dict | Raw search response payload from the proxy. |
+| `result_count` | integer | Count of items in the top-level `data` array. |
+| `provider_response` | dict | Same raw proxy result payload. |
+| `generation_id` | string | Proxy generation ID. |
+
+Behavior details:
+
+- This node returns the raw search payload, not a flattened text-only summary.
+- If you need a text output, read from `search_results` or feed the payload into downstream formatting logic.
+- The node considers the run successful as long as the request completes; `result_count` may still be `0`.
+
+Validation rules:
+
+- `index_id` is required.
+- `query_text` is required.
+- `search_options_csv` must not be empty.
+
+Use this node when:
+
+- you want retrieval across all videos in an index
+- you are building a flow that post-processes structured search results
+
+### TwelveLabs Analyze Video
+
+Display name: `TwelveLabs Analyze Video`
+
+Purpose:
+Run open-ended analysis against one indexed TwelveLabs video.
+
+Inputs:
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `video_id` | string | empty | Required. Indexed TwelveLabs video ID. |
+| `prompt` | string | empty | Required. The analysis prompt for that specific video. |
+| `temperature` | float | `0.2` | Sampling temperature. Range: `0.0` to `1.0`. |
+| `max_tokens` | integer | `1024` | Maximum output tokens. Range: `1` to `4096`. |
+
+Outputs:
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `analysis_result` | dict | Raw analysis response payload. |
+| `analysis_text` | string | Best-effort extracted text from the response. |
+| `provider_response` | dict | Same raw proxy result payload. |
+| `generation_id` | string | Proxy generation ID. |
+
+Behavior details:
+
+- This is a video-level operation, not an index-level search.
+- The node tries to extract readable text from common response shapes such as `text`, `analysis`, `summary`, `result`, `output`, `content`, `choices[0].message.content`, or `choices[0].text`.
+- If no text-like field is found, `analysis_text` falls back to a JSON-formatted string of the full result payload.
+
+Validation rules:
+
+- `video_id` is required.
+- `prompt` is required.
+
+Use this node when:
+
+- you want a direct question answered about one particular video
+- you want both a raw JSON payload and a convenient text field for downstream use
+
+## Choosing the Right Node
+
+- Use `Ingest Videos` when you want one node to go from raw video inputs to `video_ids`.
+- Use `Create Index` when you need to create an index separately from ingestion.
+- Use `Upload Asset` when the video exists but has not been uploaded yet.
+- Use `Index Asset` when the asset exists but has not been processed into a TwelveLabs video.
+- Use `Search Index` when you want retrieval across a collection of videos.
+- Use `Analyze Video` when you want a prompt answered about a single indexed video.
+
+## Practical Notes
+
+- The most important ID transition in this library is `asset_id` -> `video_id`.
+- `Search Index` works on `index_id`; `Analyze Video` works on `video_id`.
+- Both `Create Index` and `Ingest Videos` create new indexes with auto-generated names.
+- The implementation documents model configuration at index creation time as fixed after creation.
+- `Search Index` currently exposes structured results, while `Analyze Video` exposes both structured results and extracted text.
