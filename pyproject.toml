@@ -1,6 +1,6 @@
 [project]
 name = "twelvelabs_nodes_library"
-version = "0.1.0"
+version = "0.2.0"
 description = "TwelveLabs custom Griptape Nodes library"
 authors = [
     {name = "Your Name",email = "you@example.com"}
