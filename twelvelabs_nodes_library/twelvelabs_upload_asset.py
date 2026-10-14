@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from griptape_nodes.exe_types.core_types import ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, ParameterMode
 from griptape_nodes.exe_types.param_components.artifact_url.public_artifact_url_parameter import (
     PublicArtifactUrlParameter,
 )
@@ -109,15 +109,30 @@ class TwelveLabsUploadAsset(GriptapeProxyNode):
 
         index_id = (self.get_parameter_value("index_id") or "").strip()
         if not index_id:
-            exceptions.append(ValueError(f"{self.name}: index_id is required."))
+            exceptions.append(
+                NodeError(
+                    "'Index ID' is required. Enter the ID of the TwelveLabs index to upload to.",
+                    fields={"parameter": "index_id"},
+                )
+            )
 
         video = self.get_parameter_value("video")
         asset_url = (self.get_parameter_value("asset_url") or "").strip()
 
         if video and asset_url:
-            exceptions.append(ValueError(f"{self.name}: Provide either video or asset_url, not both."))
+            exceptions.append(
+                NodeError(
+                    "Both 'Video' and 'Asset URL' are set. Clear one of them and run the node again.",
+                    fields={"parameter": "asset_url"},
+                )
+            )
         elif not video and not asset_url:
-            exceptions.append(ValueError(f"{self.name}: Either video or asset_url is required."))
+            exceptions.append(
+                NodeError(
+                    "Nothing to upload. Connect a video to 'Video' or enter a public link in 'Asset URL'.",
+                    fields={"parameter": "video"},
+                )
+            )
 
         return exceptions if exceptions else None
 
@@ -149,7 +164,7 @@ class TwelveLabsUploadAsset(GriptapeProxyNode):
         }
         return payload
 
-    async def _parse_result(self, result_json: dict[str, Any], _generation_id: str) -> None:
+    async def _parse_result(self, result_json: dict[str, Any], generation_id: str) -> None:
         asset_id = result_json.get("_id")
 
         if not isinstance(asset_id, str) or not asset_id:
@@ -162,12 +177,8 @@ class TwelveLabsUploadAsset(GriptapeProxyNode):
                         asset_id = candidate
 
         if not isinstance(asset_id, str) or not asset_id:
-            self._set_safe_defaults()
-            self._set_status_results(
-                was_successful=False,
-                result_details=f"{self.name} completed but response did not include an asset ID.",
-            )
-            return
+            msg = "TwelveLabs finished the upload but the result has no asset ID. Run the node again."
+            raise NodeError(msg, fields={"generation_id": generation_id}, response=result_json)
 
         self.parameter_output_values["asset_id"] = asset_id
         self._set_status_results(

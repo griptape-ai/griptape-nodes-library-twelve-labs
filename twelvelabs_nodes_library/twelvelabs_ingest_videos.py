@@ -6,7 +6,7 @@ from contextlib import suppress
 from typing import Any
 
 from griptape.artifacts.url_artifact import UrlArtifact
-from griptape_nodes.exe_types.core_types import Parameter, ParameterList, ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterList, ParameterMode
 from griptape_nodes.exe_types.param_components.artifact_url.public_artifact_url_parameter import (
     PublicArtifactUrlParameter,
 )
@@ -213,22 +213,42 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
         marengo_model_name = (self.get_parameter_value("marengo_model_name") or "").strip()
         pegasus_model_name = (self.get_parameter_value("pegasus_model_name") or "").strip()
         if not any([marengo_model_name, pegasus_model_name]):
-            exceptions.append(ValueError(f"{self.name}: At least one model must be enabled."))
+            exceptions.append(
+                NodeError(
+                    "No model is selected. Choose one in 'Marengo Model' or 'Pegasus Model'.",
+                    fields={"parameter": "marengo_model_name"},
+                )
+            )
 
         selected_options = [
             bool(self.get_parameter_value("visual")),
             bool(self.get_parameter_value("audio")),
         ]
         if not any(selected_options):
-            exceptions.append(ValueError(f"{self.name}: At least one model option must be enabled."))
+            exceptions.append(
+                NodeError(
+                    "No model option is turned on. Turn on 'Visual' or 'Audio'.",
+                    fields={"parameter": "visual"},
+                )
+            )
 
         addons_csv = (self.get_parameter_value("addons_csv") or "").strip()
         if addons_csv and not marengo_model_name:
-            exceptions.append(ValueError(f"{self.name}: addons require a Marengo model to be enabled."))
+            exceptions.append(
+                NodeError(
+                    "'Addons (CSV)' needs a Marengo model. Choose one in 'Marengo Model' or clear 'Addons (CSV)'.",
+                    fields={"parameter": "addons_csv"},
+                )
+            )
 
         videos = self.get_parameter_list_value("videos")
         if len(videos) == 0:
-            exceptions.append(ValueError(f"{self.name}: At least one video is required."))
+            exceptions.append(
+                NodeError(
+                    "No videos to ingest. Connect at least one video to 'Videos'.",
+                    fields={"parameter": "videos"},
+                )
+            )
 
         return exceptions if exceptions else None
 
@@ -299,9 +319,7 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
                 ),
             )
         except Exception as e:
-            self._set_safe_defaults()
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)
         finally:
             self._cleanup_current_staged_artifact()
 
@@ -346,27 +364,19 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
         self, *, api_model_id: str, payload: dict[str, Any], headers: dict[str, str], step_label: str
     ) -> dict[str, Any]:
         generation_id = await self._submit_generation(payload, headers, api_model_id)
-        if not generation_id:
-            msg = f"{self.name}: Failed to {step_label}: no generation_id returned."
-            raise RuntimeError(msg)
-
-        status_response = await self._poll_generation_status(generation_id, headers)
-        if not status_response:
-            msg = f"{self.name}: Failed to {step_label}: generation status did not complete."
-            raise RuntimeError(msg)
-
+        await self._poll_generation_status(generation_id, headers)
         result = await self._fetch_generation_result(generation_id)
-        if not result or not isinstance(result, dict):
-            msg = f"{self.name}: Failed to {step_label}: missing or invalid result payload."
-            raise RuntimeError(msg)
+        if not isinstance(result, dict):
+            msg = f"Griptape Cloud returned an unreadable result while trying to {step_label}. Run the node again."
+            raise NodeError(msg, fields={"generation_id": generation_id})
         return result
 
     def _extract_index_id(self, result_json: dict[str, Any]) -> str:
         index_id = result_json.get("_id")
         if isinstance(index_id, str) and index_id:
             return index_id
-        msg = f"{self.name}: create index completed but response did not include an index ID."
-        raise RuntimeError(msg)
+        msg = "TwelveLabs finished the create index step but the result has no index ID. Run the node again."
+        raise NodeError(msg, response=result_json)
 
     def _extract_asset_id(self, result_json: dict[str, Any]) -> str:
         asset_id = result_json.get("_id")
@@ -381,8 +391,8 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
                 if isinstance(candidate, str) and candidate:
                     return candidate
 
-        msg = f"{self.name}: upload asset completed but response did not include an asset ID."
-        raise RuntimeError(msg)
+        msg = "TwelveLabs finished the upload asset step but the result has no asset ID. Run the node again."
+        raise NodeError(msg, response=result_json)
 
     def _extract_video_id(self, result_json: dict[str, Any]) -> str:
         video_id = result_json.get("_id")
@@ -395,16 +405,16 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
                 if isinstance(value, str) and value:
                     return value
 
-        msg = f"{self.name}: index asset completed but response did not include a video ID."
-        raise RuntimeError(msg)
+        msg = "TwelveLabs finished the index asset step but the result has no video ID. Run the node again."
+        raise NodeError(msg, response=result_json)
 
     def _resolve_video_input_to_public_url(self, video_input: Any) -> str:
         url_value = video_input.value if isinstance(video_input, UrlArtifact) else video_input
         if isinstance(url_value, str):
             url_value = url_value.strip()
         if not url_value:
-            msg = f"{self.name}: video input must resolve to a non-empty URL or path."
-            raise ValueError(msg)
+            msg = "One of the entries in 'Videos' is empty. Connect a video or enter a URL for each entry."
+            raise NodeError(msg, fields={"parameter": "videos"})
 
         if (
             isinstance(url_value, str)
@@ -416,8 +426,8 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
         self.set_parameter_value("video_upload_helper", url_value)
         public_url = self._public_video_url_parameter.get_public_url_for_parameter()
         if not public_url:
-            msg = f"{self.name}: failed to convert video input to public URL."
-            raise ValueError(msg)
+            msg = "Could not create a public link for a video in 'Videos'. Check that the video file exists and run the node again."
+            raise NodeError(msg, fields={"parameter": "videos"})
         return public_url
 
     def _cleanup_current_staged_artifact(self) -> None:

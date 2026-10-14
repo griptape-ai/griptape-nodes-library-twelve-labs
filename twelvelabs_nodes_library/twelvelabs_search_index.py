@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from griptape_nodes.exe_types.core_types import ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, ParameterMode
 from griptape_nodes.exe_types.param_types.parameter_dict import ParameterDict
 from griptape_nodes.exe_types.param_types.parameter_int import ParameterInt
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
@@ -121,15 +121,27 @@ class TwelveLabsSearchIndex(GriptapeProxyNode):
 
         index_id = (self.get_parameter_value("index_id") or "").strip()
         if not index_id:
-            exceptions.append(ValueError(f"{self.name}: index_id is required."))
+            exceptions.append(
+                NodeError(
+                    "'Index ID' is required. Enter the ID of the TwelveLabs index to search.",
+                    fields={"parameter": "index_id"},
+                )
+            )
 
         query_text = (self.get_parameter_value("query_text") or "").strip()
         if not query_text:
-            exceptions.append(ValueError(f"{self.name}: query_text is required."))
+            exceptions.append(
+                NodeError("'Query' is required. Enter the text to search for.", fields={"parameter": "query_text"})
+            )
 
         search_options_csv = (self.get_parameter_value("search_options_csv") or "").strip()
         if not search_options_csv:
-            exceptions.append(ValueError(f"{self.name}: search_options_csv is required."))
+            exceptions.append(
+                NodeError(
+                    "'Search Options (CSV)' is required. Enter at least one option, such as visual,conversation.",
+                    fields={"parameter": "search_options_csv"},
+                )
+            )
 
         return exceptions if exceptions else None
 

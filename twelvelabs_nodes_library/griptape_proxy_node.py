@@ -1,20 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from abc import ABC, abstractmethod
 from contextlib import suppress
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin
 
 import httpx
+from griptape_nodes.exe_types.core_types import NodeError, NodeErrorLink
 from griptape_nodes.exe_types.node_types import SuccessFailureNode
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes
 
 logger = logging.getLogger("griptape_nodes")
 
 __all__ = ["GriptapeProxyNode"]
+
+# NodeError drops a response over 16 KB, so attach at most this many characters of it.
+MAX_RESPONSE_CHARS = 12000
 
 
 class GriptapeProxyNode(SuccessFailureNode, ABC):
@@ -89,48 +94,74 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
         parameters to safe default values when an error occurs.
         """
 
-    def _extract_error_message(self, response_json: dict[str, Any]) -> str:
-        """Extract error message from failed/errored generation response.
+    def _extract_error_message(self, response_json: dict[str, Any]) -> str | None:
+        """Extract the provider's own error message from an error or failed-generation body.
 
-        Default implementation follows this hierarchy:
+        Looks, in order, at:
         1. status_detail.details (user-oriented message)
-        2. entire status_detail object
-        3. top-level error field
-        4. full response
+        2. a string status_detail
+        3. the top-level error field
+        4. the errors list used by Griptape Cloud error responses
+        5. top-level detail or message fields
 
         Subclasses can override this to add model-specific error extraction logic.
 
         Args:
-            response_json: The JSON response from the generation status endpoint
-                          when status is FAILED or ERRORED
+            response_json: The parsed JSON body of an error or failed-generation response
 
         Returns:
-            str: A formatted error message to display to the user
+            str | None: The message, or None when the body holds no usable text
         """
-        if not response_json:
-            return f"{self.name} generation failed with no error details provided by API."
+        if not isinstance(response_json, dict):
+            return None
 
-        # First, try to extract from status_detail.details (user-oriented message)
         status_detail = response_json.get("status_detail")
-        if status_detail and isinstance(status_detail, dict):
+        if isinstance(status_detail, dict):
             details = status_detail.get("details")
             if details:
-                return f"{self.name} {details}"
+                return str(details)
+        elif isinstance(status_detail, str) and status_detail.strip():
+            return status_detail.strip()
 
-        # Try top-level error field
         error = response_json.get("error")
-        if error:
-            if isinstance(error, dict):
-                error_msg = error.get("message") or error.get("error") or str(error)
-                return f"{self.name} {error_msg}"
-            return f"{self.name} {error}"
+        if isinstance(error, dict):
+            error_msg = error.get("message") or error.get("error")
+            if error_msg:
+                return str(error_msg)
+        elif error:
+            return str(error)
 
-        # Try entire status_detail object
-        if status_detail:
-            return f"{self.name} generation failed.\n\nError details:\n{status_detail}"
+        errors_message = self._join_error_list(response_json.get("errors"))
+        if errors_message:
+            return errors_message
 
-        # Final fallback: show the full response
-        return f"{self.name} generation failed.\n\nFull API response:\n{response_json}"
+        for key in ("detail", "message"):
+            value = response_json.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+        return None
+
+    @staticmethod
+    def _join_error_list(errors: Any) -> str | None:
+        """Join the detail strings of a Griptape Cloud style `errors` list."""
+        if not isinstance(errors, list):
+            return None
+
+        messages: list[str] = []
+        for item in errors:
+            if not isinstance(item, dict):
+                continue
+            detail = item.get("detail")
+            if not isinstance(detail, str) or not detail.strip():
+                continue
+            attr = item.get("attr")
+            text = detail.strip()
+            if isinstance(attr, str) and attr and attr not in ("detail", "code", "non_field_errors"):
+                text = f"{attr}: {text}"
+            if text not in messages:
+                messages.append(text)
+        return " ".join(messages) if messages else None
 
     def _get_api_model_id(self) -> str:
         """Get the API model ID for this generation.
@@ -143,6 +174,9 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
         """
         return self.get_parameter_value("model") or ""
 
+    def _api_key_link(self, label: str) -> NodeErrorLink:
+        return NodeErrorLink(label=label, url=f"#settings-secrets?filter={quote(self.API_KEY_NAME)}")
+
     def _validate_api_key(self) -> str:
         """Validate and return the API key.
 
@@ -150,13 +184,12 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
             str: The API key
 
         Raises:
-            ValueError: If API key is missing
+            NodeError: If the API key is missing
         """
         api_key = GriptapeNodes.SecretsManager().get_secret(self.API_KEY_NAME)
         if not api_key:
-            self._set_safe_defaults()
-            msg = f"{self.name} is missing {self.API_KEY_NAME}. Ensure it's set in the environment/config."
-            raise ValueError(msg)
+            msg = f"{self.API_KEY_NAME} is not set. Add it in Settings → API Keys & Secrets, then run the node again."
+            raise NodeError(msg, links=[self._api_key_link("Add the API key")])
         return api_key
 
     def _log(self, message: str) -> None:
@@ -164,9 +197,65 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
         with suppress(Exception):
             logger.info(message)
 
-    async def _submit_generation(
-        self, payload: dict[str, Any], headers: dict[str, str], api_model_id: str
-    ) -> str | None:
+    @staticmethod
+    def _bounded_response(body: dict[str, Any] | None, text: str = "") -> dict[str, Any]:
+        """Return a response dict that fits the NodeError size limit."""
+        if body is not None:
+            serialized = json.dumps(body, default=str)
+            if len(serialized) <= MAX_RESPONSE_CHARS:
+                return body
+            return {"truncated_body": serialized[:MAX_RESPONSE_CHARS]}
+        return {"body": text[:MAX_RESPONSE_CHARS]}
+
+    def _http_error(self, response: httpx.Response, *, action: str, generation_id: str | None = None) -> NodeError:
+        """Build a NodeError from a failed Griptape Cloud HTTP response.
+
+        Args:
+            response: The failed response
+            action: What the node was doing, as a gerund phrase such as "submitting the request"
+            generation_id: The generation this request belongs to, when there is one
+        """
+        status_code = response.status_code
+        fields: dict[str, str | int | float | bool] = {"status_code": status_code}
+        request_id = response.headers.get("x-request-id")
+        if request_id:
+            fields["request_id"] = request_id
+        if generation_id:
+            fields["generation_id"] = generation_id
+
+        try:
+            parsed = response.json()
+        except ValueError:
+            parsed = None
+        body = parsed if isinstance(parsed, dict) else None
+        attached = self._bounded_response(body, response.text)
+
+        if status_code in (401, 403):
+            msg = (
+                f"Griptape Cloud refused {self.API_KEY_NAME}. "
+                "Update the key in Settings → API Keys & Secrets, then run the node again."
+            )
+            return NodeError(msg, fields=fields, response=attached, links=[self._api_key_link("Update the API key")])
+
+        if status_code == 429:
+            msg = "Griptape Cloud is rate-limiting requests. Wait a minute and run the node again."
+            return NodeError(msg, fields=fields, response=attached)
+
+        provider_message = self._extract_error_message(body) if body else None
+        msg = provider_message or f"Griptape Cloud returned HTTP {status_code} while {action}."
+        return NodeError(msg, fields=fields, response=attached)
+
+    @staticmethod
+    def _connection_error(error: Exception, *, action: str, generation_id: str | None = None) -> NodeError:
+        """Build a NodeError for a request that never got an HTTP response."""
+        fields: dict[str, str | int | float | bool] = {}
+        if generation_id:
+            fields["generation_id"] = generation_id
+        detail = str(error) or type(error).__name__
+        msg = f"Could not reach Griptape Cloud while {action} ({detail}). Check your connection and run the node again."
+        return NodeError(msg, fields=fields)
+
+    async def _submit_generation(self, payload: dict[str, Any], headers: dict[str, str], api_model_id: str) -> str:
         """Submit generation request to the v2 API.
 
         Args:
@@ -175,14 +264,15 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
             api_model_id: The model ID to use in the URL
 
         Returns:
-            str | None: The generation ID if successful, None otherwise
+            str: The generation ID
 
         Raises:
-            RuntimeError: If the API request fails
+            NodeError: If the request fails or the response has no generation ID
         """
         proxy_url = urljoin(self._proxy_base, f"models/{api_model_id}")
         self._log(f"Submitting generation request to {proxy_url}")
 
+        action = "submitting the request"
         try:
             async with httpx.AsyncClient() as client:
                 request_headers = headers.copy()
@@ -194,12 +284,10 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
                 self._log("Request submitted successfully")
         except httpx.HTTPStatusError as e:
             self._log(f"HTTP error: {e.response.status_code} - {e.response.text}")
-            error_msg = self._extract_http_error_message(e.response)
-            raise RuntimeError(error_msg) from e
+            raise self._http_error(e.response, action=action) from e
         except Exception as e:
             self._log(f"Request failed: {e}")
-            msg = f"{self.name} request failed: {e}"
-            raise RuntimeError(msg) from e
+            raise self._connection_error(e, action=action) from e
 
         generation_id = response_json.get("generation_id")
         if generation_id:
@@ -207,26 +295,10 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
             return str(generation_id)
 
         self._log("No generation_id returned from POST response")
-        return None
+        msg = "Griptape Cloud accepted the request but did not return a generation ID. Run the node again."
+        raise NodeError(msg, response=self._bounded_response(response_json))
 
-    def _extract_http_error_message(self, response: httpx.Response) -> str:
-        """Extract error message from HTTP error response.
-
-        Args:
-            response: The HTTP response object
-
-        Returns:
-            str: Formatted error message
-        """
-        try:
-            error_json = response.json()
-        except Exception:
-            return f"{self.name}: API error: {response.status_code} - {response.text}"
-        else:
-            error_message = self._extract_error_message(error_json)
-            return f"{self.name}: {error_message}"
-
-    async def _poll_generation_status(self, generation_id: str, headers: dict[str, str]) -> dict[str, Any] | None:
+    async def _poll_generation_status(self, generation_id: str, headers: dict[str, str]) -> dict[str, Any]:
         """Poll generation status until terminal state is reached.
 
         Args:
@@ -234,193 +306,140 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
             headers: HTTP headers including Authorization
 
         Returns:
-            dict | None: The final status response, or None if polling failed
+            dict: The final status response
+
+        Raises:
+            NodeError: If the generation fails, polling keeps failing, or the generation times out
         """
         get_url = urljoin(self._proxy_base, f"generations/{generation_id}")
         max_attempts = self.DEFAULT_MAX_ATTEMPTS
         poll_interval = self.DEFAULT_POLL_INTERVAL
+        action = "checking the generation status"
 
         async with httpx.AsyncClient() as client:
             for attempt in range(max_attempts):
+                self._log(f"Polling attempt #{attempt + 1} for generation {generation_id}")
                 try:
-                    self._log(f"Polling attempt #{attempt + 1} for generation {generation_id}")
-
                     response = await client.get(get_url, headers=headers, timeout=60)
                     response.raise_for_status()
                     result_json = response.json()
-
-                    status = result_json.get("status", "unknown")
-                    self._log(f"Status: {status}")
-
-                    if status == "COMPLETED":
-                        return result_json
-
-                    if status in ["FAILED", "ERRORED"]:
-                        logger.error("%s: Generation failed with status: %s", self.name, status)
-                        logger.error("%s: Error response: %s", self.name, result_json)
-                        self._set_safe_defaults()
-                        error_message = self._extract_error_message(result_json)
-                        logger.error("%s: Extracted error message: %s", self.name, error_message)
-                        if not error_message:
-                            error_message = f"{self.name} generation failed with status {status} but no error details were provided."
-                        self._set_status_results(was_successful=False, result_details=error_message)
-                        return None
-
-                    # Still processing (QUEUED or RUNNING), wait before next poll
-                    if attempt < max_attempts - 1:
-                        await asyncio.sleep(poll_interval)
-
                 except httpx.HTTPStatusError as e:
                     self._log(f"HTTP error while polling: {e.response.status_code} - {e.response.text}")
                     if attempt == max_attempts - 1:
-                        self._set_safe_defaults()
-                        error_msg = f"Failed to poll generation status: HTTP {e.response.status_code}"
-                        self._set_status_results(was_successful=False, result_details=error_msg)
-                        return None
+                        raise self._http_error(e.response, action=action, generation_id=generation_id) from e
+                    continue
                 except Exception as e:
                     self._log(f"Error while polling: {e}")
                     if attempt == max_attempts - 1:
-                        self._set_safe_defaults()
-                        error_msg = f"Failed to poll generation status: {e}"
-                        self._set_status_results(was_successful=False, result_details=error_msg)
-                        return None
+                        raise self._connection_error(e, action=action, generation_id=generation_id) from e
+                    continue
 
-        # Timeout reached
+                status = result_json.get("status", "unknown")
+                self._log(f"Status: {status}")
+
+                if status == "COMPLETED":
+                    return result_json
+
+                if status in ["FAILED", "ERRORED"]:
+                    logger.error("Generation %s failed with status %s: %s", generation_id, status, result_json)
+                    msg = self._extract_error_message(result_json) or (
+                        f"The generation ended with status {status} and the API gave no details."
+                    )
+                    raise NodeError(
+                        msg,
+                        fields={"generation_id": generation_id, "status": status},
+                        response=self._bounded_response(result_json),
+                    )
+
+                # Still processing (QUEUED or RUNNING), wait before next poll
+                if attempt < max_attempts - 1:
+                    await asyncio.sleep(poll_interval)
+
         self._log("Polling timed out waiting for result")
-        self._set_safe_defaults()
-        self._set_status_results(
-            was_successful=False,
-            result_details=f"Generation timed out after {max_attempts * poll_interval} seconds waiting for result.",
+        msg = (
+            f"The generation did not finish within {max_attempts * poll_interval} seconds. "
+            "Run the node again. If it keeps happening, contact support with the generation ID."
         )
-        return None
+        raise NodeError(msg, fields={"generation_id": generation_id})
 
-    async def _fetch_generation_result(self, generation_id: str) -> dict[str, Any] | None:
+    async def _fetch_generation_result(self, generation_id: str) -> dict[str, Any]:
         """Fetch the final result from the /result endpoint.
 
         Args:
             generation_id: The generation ID
 
         Returns:
-            dict | None: The result JSON or dict containing raw bytes, or None if fetch failed
+            dict: The result JSON, or a dict holding the raw bytes for a binary result
+
+        Raises:
+            NodeError: If the API key is missing, the fetch fails, or the result is empty
         """
         result_url = urljoin(self._proxy_base, f"generations/{generation_id}/result")
         self._log(f"Fetching result from {result_url}")
 
-        try:
-            api_key = self._validate_api_key()
-        except ValueError as e:
-            self._handle_api_key_validation_error(e)
-            return None
-
+        api_key = self._validate_api_key()
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        action = "fetching the generation result"
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(result_url, headers=headers, timeout=300)
                 response.raise_for_status()
         except httpx.HTTPStatusError as e:
             self._log(f"HTTP error fetching result: {e.response.status_code} - {e.response.text}")
-            self._set_safe_defaults()
-            error_msg = f"Failed to fetch generation result: HTTP {e.response.status_code}"
-            self._set_status_results(was_successful=False, result_details=error_msg)
-            return None
+            raise self._http_error(e.response, action=action, generation_id=generation_id) from e
         except Exception as e:
             self._log(f"Error fetching result: {e}")
-            self._set_safe_defaults()
-            error_msg = f"Failed to fetch generation result: {e}"
-            self._set_status_results(was_successful=False, result_details=error_msg)
-            return None
-        else:
-            # Check Content-Type to determine if response is JSON or binary
-            content_type = response.headers.get("content-type", "").lower()
+            raise self._connection_error(e, action=action, generation_id=generation_id) from e
 
-            if "application/json" in content_type:
-                result_json = response.json()
-                self._log("Result fetched successfully (JSON)")
-                return result_json
+        # Check Content-Type to determine if response is JSON or binary
+        content_type = response.headers.get("content-type", "").lower()
 
-            # Handle binary responses (raw audio, video, etc.)
-            self._log(f"Result fetched successfully (binary, content-type: {content_type})")
-            return {"raw_bytes": response.content}
+        if "application/json" in content_type:
+            result_json = response.json()
+            self._log("Result fetched successfully (JSON)")
+            if not result_json:
+                msg = "Griptape Cloud returned an empty result. Run the node again."
+                raise NodeError(msg, fields={"generation_id": generation_id})
+            return result_json
 
-    def _handle_api_key_validation_error(self, e: ValueError) -> None:
-        """Handle API key validation errors."""
+        # Handle binary responses (raw audio, video, etc.)
+        self._log(f"Result fetched successfully (binary, content-type: {content_type})")
+        return {"raw_bytes": response.content}
+
+    def _fail(self, error: Exception) -> None:
+        """Report a failure: clear outputs, set status, and follow Failed or raise."""
+        self._log(f"Node failed: {error}")
         self._set_safe_defaults()
-        self._set_status_results(was_successful=False, result_details=str(e))
-        self._handle_failure_exception(e)
+        self._set_status_results(was_successful=False, result_details=str(error))
+        self._handle_failure_exception(error)
 
-    def _handle_payload_build_error(self, e: Exception) -> None:
-        """Handle payload building errors."""
-        self._set_safe_defaults()
-        error_msg = f"{self.name}: Failed to build request payload: {e}"
-        self._set_status_results(was_successful=False, result_details=error_msg)
-        self._handle_failure_exception(e)
+    async def _generate(self) -> None:
+        """Run the generation flow. Any failure raises."""
+        api_key = self._validate_api_key()
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
-    def _handle_missing_model_id(self) -> None:
-        """Handle missing model ID error."""
-        self._set_safe_defaults()
-        error_msg = f"{self.name}: No model ID provided"
-        self._set_status_results(was_successful=False, result_details=error_msg)
+        payload = await self._build_payload()
 
-    def _handle_submission_error(self, e: RuntimeError) -> None:
-        """Handle generation submission errors."""
-        self._set_safe_defaults()
-        self._set_status_results(was_successful=False, result_details=str(e))
-        self._handle_failure_exception(e)
-
-    def _handle_result_parsing_error(self, e: Exception) -> None:
-        """Handle result parsing errors."""
-        self._log(f"Error parsing result: {e}")
-        self._set_safe_defaults()
-        error_msg = f"Failed to parse generation result: {e}"
-        self._set_status_results(was_successful=False, result_details=error_msg)
-        self._handle_failure_exception(e)
-
-    async def _submit_and_poll(self, headers: dict[str, str]) -> tuple[str, dict[str, Any]] | None:
-        """Submit generation request and poll for completion.
-
-        Args:
-            headers: HTTP headers including Authorization
-
-        Returns:
-            tuple | None: (generation_id, status_response) if successful, None otherwise
-        """
-        # Build payload
-        try:
-            payload = await self._build_payload()
-        except Exception as e:
-            self._handle_payload_build_error(e)
-            return None
-
-        # Get API model ID
         api_model_id = self._get_api_model_id()
         if not api_model_id:
-            self._handle_missing_model_id()
-            return None
+            msg = "No model is selected. Choose one in 'Model' and run the node again."
+            raise NodeError(msg, fields={"parameter": "model"})
 
-        # Submit request to get generation ID
-        try:
-            generation_id = await self._submit_generation(payload, headers, api_model_id)
-            if not generation_id:
-                self._set_safe_defaults()
-                self._set_status_results(
-                    was_successful=False,
-                    result_details="No generation_id returned from API. Cannot proceed with generation.",
-                )
-                return None
-        except RuntimeError as e:
-            self._handle_submission_error(e)
-            return None
+        generation_id = await self._submit_generation(payload, headers, api_model_id)
 
         # Store generation_id if output parameter exists
         if "generation_id" in self.parameter_output_values:
             self.parameter_output_values["generation_id"] = generation_id
 
-        # Poll for completion
-        status_response = await self._poll_generation_status(generation_id, headers)
-        if not status_response:
-            return None
+        await self._poll_generation_status(generation_id, headers)
 
-        return generation_id, status_response
+        result_json = await self._fetch_generation_result(generation_id)
+
+        # Store provider_response if output parameter exists
+        if "provider_response" in self.parameter_output_values:
+            self.parameter_output_values["provider_response"] = result_json
+
+        await self._parse_result(result_json, generation_id)
 
     async def _process_generation(self) -> None:
         """Main processing logic that orchestrates the generation flow.
@@ -431,40 +450,16 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
         3. Generation submission
         4. Status polling
         5. Result fetching and parsing
+
+        Every failure goes through `_fail`.
         """
         # Clear execution status at the start
         self._clear_execution_status()
 
-        # Validate API key
         try:
-            api_key = self._validate_api_key()
-        except ValueError as e:
-            self._handle_api_key_validation_error(e)
-            return
-
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-
-        # Submit and poll
-        result = await self._submit_and_poll(headers)
-        if not result:
-            return
-
-        generation_id, _status_response = result
-
-        # Fetch and parse result
-        result_json = await self._fetch_generation_result(generation_id)
-        if not result_json:
-            return
-
-        # Store provider_response if output parameter exists
-        if "provider_response" in self.parameter_output_values:
-            self.parameter_output_values["provider_response"] = result_json
-
-        # Parse model-specific result
-        try:
-            await self._parse_result(result_json, generation_id)
+            await self._generate()
         except Exception as e:
-            self._handle_result_parsing_error(e)
+            self._fail(e)
 
     async def aprocess(self) -> None:
         """Async processing entry point."""
