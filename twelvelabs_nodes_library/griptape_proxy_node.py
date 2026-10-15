@@ -192,6 +192,15 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
             raise NodeError(msg, links=[self._api_key_link("Add the API key")])
         return api_key
 
+    def validate_before_node_run(self) -> list[Exception] | None:
+        """Report a missing API key on its own, since nothing can run without it."""
+        base_errors = super().validate_before_node_run()
+        try:
+            self._validate_api_key()
+        except NodeError as e:
+            return [e]
+        return base_errors
+
     def _log(self, message: str) -> None:
         """Log a message with error suppression."""
         with suppress(Exception):

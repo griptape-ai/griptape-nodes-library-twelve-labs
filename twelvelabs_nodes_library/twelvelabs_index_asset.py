@@ -104,6 +104,8 @@ class TwelveLabsIndexAsset(GriptapeProxyNode):
 
     def validate_before_node_run(self) -> list[Exception] | None:
         exceptions = super().validate_before_node_run() or []
+        if exceptions:
+            return exceptions
 
         index_id = (self.get_parameter_value("index_id") or "").strip()
         if not index_id:

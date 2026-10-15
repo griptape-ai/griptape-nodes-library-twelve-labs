@@ -209,6 +209,8 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
 
     def validate_before_node_run(self) -> list[Exception] | None:
         exceptions = super().validate_before_node_run() or []
+        if exceptions:
+            return exceptions
 
         marengo_model_name = (self.get_parameter_value("marengo_model_name") or "").strip()
         pegasus_model_name = (self.get_parameter_value("pegasus_model_name") or "").strip()

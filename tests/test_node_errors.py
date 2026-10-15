@@ -423,7 +423,7 @@ def _problems(node: Any) -> list[NodeError]:
     return problems
 
 
-def test_analyze_video_lists_each_empty_input_by_label() -> None:
+def test_analyze_video_lists_each_empty_input_by_label(api_key: None) -> None:
     module = _load_node_module("twelvelabs_analyze_video")
     node = module.TwelveLabsAnalyzeVideo(name="Analyze")
 
@@ -436,7 +436,7 @@ def test_analyze_video_lists_each_empty_input_by_label() -> None:
     assert [p.fields for p in problems] == [{"parameter": "video_id"}, {"parameter": "prompt"}]
 
 
-def test_create_index_names_the_parameters_to_fix() -> None:
+def test_create_index_names_the_parameters_to_fix(api_key: None) -> None:
     module = _load_node_module("twelvelabs_create_index")
     node = module.TwelveLabsCreateIndex(name="Create")
     node.set_parameter_value("marengo_model_name", "")
@@ -450,6 +450,32 @@ def test_create_index_names_the_parameters_to_fix() -> None:
         "No model option is turned on. Turn on 'Visual' or 'Audio'.",
         "'Addons (CSV)' needs a Marengo model. Choose one in 'Marengo Model' or clear 'Addons (CSV)'.",
     ]
+
+
+@pytest.mark.parametrize(
+    ("stem", "class_name"),
+    [
+        ("twelvelabs_analyze_video", "TwelveLabsAnalyzeVideo"),
+        ("twelvelabs_create_index", "TwelveLabsCreateIndex"),
+        ("twelvelabs_index_asset", "TwelveLabsIndexAsset"),
+        ("twelvelabs_ingest_videos", "TwelveLabsIngestVideos"),
+        ("twelvelabs_search_index", "TwelveLabsSearchIndex"),
+        ("twelvelabs_upload_asset", "TwelveLabsUploadAsset"),
+    ],
+)
+def test_a_missing_key_is_the_only_problem_reported_and_links_to_the_secret(
+    stem: str, class_name: str, api_key: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    node = getattr(_load_node_module(stem), class_name)(name="Node")
+    monkeypatch.setattr(GriptapeNodes.SecretsManager(), "get_secret", lambda *_, **__: None)
+
+    problems = _problems(node)
+
+    assert len(problems) == 1
+    assert str(problems[0]) == (
+        "GT_CLOUD_API_KEY is not set. Add it in Settings → API Keys & Secrets, then run the node again."
+    )
+    assert [link.url for link in problems[0].links] == ["#settings-secrets?filter=GT_CLOUD_API_KEY"]
 
 
 def test_upload_asset_rejects_both_and_neither_source(api_key: None) -> None:

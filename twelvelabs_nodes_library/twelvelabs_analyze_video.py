@@ -123,6 +123,8 @@ class TwelveLabsAnalyzeVideo(GriptapeProxyNode):
 
     def validate_before_node_run(self) -> list[Exception] | None:
         exceptions = super().validate_before_node_run() or []
+        if exceptions:
+            return exceptions
 
         video_id = (self.get_parameter_value("video_id") or "").strip()
         if not video_id:
