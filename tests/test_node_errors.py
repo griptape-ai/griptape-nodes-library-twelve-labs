@@ -452,7 +452,7 @@ def test_create_index_names_the_parameters_to_fix() -> None:
     ]
 
 
-def test_upload_asset_rejects_both_and_neither_source() -> None:
+def test_upload_asset_rejects_both_and_neither_source(api_key: None) -> None:
     module = _load_node_module("twelvelabs_upload_asset")
     node = module.TwelveLabsUploadAsset(name="Upload")
     node.set_parameter_value("index_id", "idx")
@@ -469,7 +469,7 @@ def test_upload_asset_rejects_both_and_neither_source() -> None:
     ]
 
 
-def test_index_search_and_ingest_name_empty_inputs() -> None:
+def test_index_search_and_ingest_name_empty_inputs(api_key: None) -> None:
     index_asset = _load_node_module("twelvelabs_index_asset").TwelveLabsIndexAsset(name="Index")
     search = _load_node_module("twelvelabs_search_index").TwelveLabsSearchIndex(name="Search")
     search.set_parameter_value("search_options_csv", "")
