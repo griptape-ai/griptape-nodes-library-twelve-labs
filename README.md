@@ -1,5 +1,8 @@
 # TwelveLabs Nodes Library
 
+> [!WARNING]
+> **Deprecated.** TwelveLabs sunset Pegasus 1.2, which these nodes use for analysis, and Pegasus 1.5 analyzes video without an index, which this library's index-based flow doesn't support. There is no replacement node. Until the library is removed, Create Index and Ingest Videos still build Marengo-only search indexes if you set Pegasus Model to empty.
+
 This repository contains six Griptape nodes for working with TwelveLabs through the Griptape Cloud proxy API.
 
 The library is built around the core TwelveLabs workflow:
