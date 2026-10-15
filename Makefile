@@ -8,7 +8,7 @@ version/get: ## Get version.
 
 .PHONY: version/set
 version/set: ## Set version. Usage: make version/set v=1.2.3
-	@jq --arg v "$(v)" '.metadata.library_version = $$v' $(LIBRARY_JSON) > $(LIBRARY_JSON).tmp
+	@jq --indent 4 --arg v "$(v)" '.metadata.library_version = $$v' $(LIBRARY_JSON) > $(LIBRARY_JSON).tmp
 	@mv $(LIBRARY_JSON).tmp $(LIBRARY_JSON)
 	@make version/commit
 
@@ -17,7 +17,7 @@ version/patch: ## Bump patch version.
 	@CURRENT=$$(make version/get); \
 	IFS='.' read -r major minor patch <<< "$$CURRENT"; \
 	NEW_VERSION="$${major}.$${minor}.$$((patch + 1))"; \
-	jq --arg v "$$NEW_VERSION" '.metadata.library_version = $$v' $(LIBRARY_JSON) > $(LIBRARY_JSON).tmp; \
+	jq --indent 4 --arg v "$$NEW_VERSION" '.metadata.library_version = $$v' $(LIBRARY_JSON) > $(LIBRARY_JSON).tmp; \
 	mv $(LIBRARY_JSON).tmp $(LIBRARY_JSON); \
 	echo "Bumped to $$NEW_VERSION"
 	@make version/commit
@@ -27,7 +27,7 @@ version/minor: ## Bump minor version.
 	@CURRENT=$$(make version/get); \
 	IFS='.' read -r major minor patch <<< "$$CURRENT"; \
 	NEW_VERSION="$${major}.$$((minor + 1)).0"; \
-	jq --arg v "$$NEW_VERSION" '.metadata.library_version = $$v' $(LIBRARY_JSON) > $(LIBRARY_JSON).tmp; \
+	jq --indent 4 --arg v "$$NEW_VERSION" '.metadata.library_version = $$v' $(LIBRARY_JSON) > $(LIBRARY_JSON).tmp; \
 	mv $(LIBRARY_JSON).tmp $(LIBRARY_JSON); \
 	echo "Bumped to $$NEW_VERSION"
 	@make version/commit
@@ -37,7 +37,7 @@ version/major: ## Bump major version.
 	@CURRENT=$$(make version/get); \
 	IFS='.' read -r major minor patch <<< "$$CURRENT"; \
 	NEW_VERSION="$$((major + 1)).0.0"; \
-	jq --arg v "$$NEW_VERSION" '.metadata.library_version = $$v' $(LIBRARY_JSON) > $(LIBRARY_JSON).tmp; \
+	jq --indent 4 --arg v "$$NEW_VERSION" '.metadata.library_version = $$v' $(LIBRARY_JSON) > $(LIBRARY_JSON).tmp; \
 	mv $(LIBRARY_JSON).tmp $(LIBRARY_JSON); \
 	echo "Bumped to $$NEW_VERSION"
 	@make version/commit
@@ -96,7 +96,7 @@ fix: ## Fix project.
 	@uv run ruff check --fix --unsafe-fixes
 
 .PHONY: check
-check: check/format check/lint check/types ## Run all checks.
+check: check/format check/lint check/types check/test ## Run all checks.
 
 .PHONY: check/format
 check/format:
@@ -109,6 +109,10 @@ check/lint:
 .PHONY: check/types
 check/types:
 	@uv run pyright .
+
+.PHONY: check/test
+check/test:
+	@uv run pytest
 
 .DEFAULT_GOAL := help
 .PHONY: help

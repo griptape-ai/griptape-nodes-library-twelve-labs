@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.param_types.parameter_bool import ParameterBool
 from griptape_nodes.exe_types.param_types.parameter_dict import ParameterDict
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
@@ -104,14 +104,25 @@ class TwelveLabsIndexAsset(GriptapeProxyNode):
 
     def validate_before_node_run(self) -> list[Exception] | None:
         exceptions = super().validate_before_node_run() or []
+        if exceptions:
+            return exceptions
 
         index_id = (self.get_parameter_value("index_id") or "").strip()
         if not index_id:
-            exceptions.append(ValueError(f"{self.name}: index_id is required."))
+            exceptions.append(
+                NodeError(
+                    "'Index ID' is required. Enter the ID of the TwelveLabs index.", fields={"parameter": "index_id"}
+                )
+            )
 
         asset_id = (self.get_parameter_value("asset_id") or "").strip()
         if not asset_id:
-            exceptions.append(ValueError(f"{self.name}: asset_id is required."))
+            exceptions.append(
+                NodeError(
+                    "'Asset ID' is required. Enter the ID of an uploaded asset, such as the Asset ID output of Upload Asset.",
+                    fields={"parameter": "asset_id"},
+                )
+            )
 
         return exceptions if exceptions else None
 
@@ -133,7 +144,7 @@ class TwelveLabsIndexAsset(GriptapeProxyNode):
             "enable_video_stream": enable_video_stream,
         }
 
-    async def _parse_result(self, result_json: dict[str, Any], _generation_id: str) -> None:
+    async def _parse_result(self, result_json: dict[str, Any], generation_id: str) -> None:
         video_ids: list[str] = []
 
         single_video_id = result_json.get("_id")
@@ -147,12 +158,8 @@ class TwelveLabsIndexAsset(GriptapeProxyNode):
                     video_ids.append(value)
 
         if not video_ids:
-            self._set_safe_defaults()
-            self._set_status_results(
-                was_successful=False,
-                result_details=f"{self.name} completed but response did not include a video ID.",
-            )
-            return
+            msg = "TwelveLabs finished indexing but the result has no video ID. Run the node again."
+            raise NodeError(msg, fields={"generation_id": generation_id}, response=result_json)
 
         self.parameter_output_values["video_id"] = video_ids[0]
         self.parameter_output_values["video_ids"] = video_ids

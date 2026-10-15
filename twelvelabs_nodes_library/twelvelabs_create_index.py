@@ -4,7 +4,7 @@ import time
 import uuid
 from typing import Any, ClassVar
 
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.param_types.parameter_bool import ParameterBool
 from griptape_nodes.exe_types.param_types.parameter_dict import ParameterDict
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
@@ -134,24 +134,41 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
 
     def validate_before_node_run(self) -> list[Exception] | None:
         exceptions = super().validate_before_node_run() or []
+        if exceptions:
+            return exceptions
 
         marengo_model_name = (self.get_parameter_value("marengo_model_name") or "").strip()
         pegasus_model_name = (self.get_parameter_value("pegasus_model_name") or "").strip()
         selected_models = [marengo_model_name, pegasus_model_name]
         if not any(selected_models):
-            exceptions.append(ValueError(f"{self.name}: At least one model must be enabled."))
+            exceptions.append(
+                NodeError(
+                    "No model is selected. Choose one in 'Marengo Model' or 'Pegasus Model'.",
+                    fields={"parameter": "marengo_model_name"},
+                )
+            )
 
         selected_options = [
             bool(self.get_parameter_value("visual")),
             bool(self.get_parameter_value("audio")),
         ]
         if not any(selected_options):
-            exceptions.append(ValueError(f"{self.name}: At least one model option must be enabled."))
+            exceptions.append(
+                NodeError(
+                    "No model option is turned on. Turn on 'Visual' or 'Audio'.",
+                    fields={"parameter": "visual"},
+                )
+            )
 
         addons_csv = (self.get_parameter_value("addons_csv") or "").strip()
         marengo_enabled = bool(marengo_model_name)
         if addons_csv and not marengo_enabled:
-            exceptions.append(ValueError(f"{self.name}: addons require a Marengo model to be enabled."))
+            exceptions.append(
+                NodeError(
+                    "'Addons (CSV)' needs a Marengo model. Choose one in 'Marengo Model' or clear 'Addons (CSV)'.",
+                    fields={"parameter": "addons_csv"},
+                )
+            )
 
         return exceptions if exceptions else None
 
@@ -199,15 +216,11 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
 
         return payload
 
-    async def _parse_result(self, result_json: dict[str, Any], _generation_id: str) -> None:
+    async def _parse_result(self, result_json: dict[str, Any], generation_id: str) -> None:
         index_id = result_json.get("_id")
         if not isinstance(index_id, str) or not index_id:
-            self._set_safe_defaults()
-            self._set_status_results(
-                was_successful=False,
-                result_details=f"{self.name} completed but response did not include an index ID.",
-            )
-            return
+            msg = "TwelveLabs finished creating the index but the result has no index ID. Run the node again."
+            raise NodeError(msg, fields={"generation_id": generation_id}, response=result_json)
 
         self.parameter_output_values["index_id"] = index_id
         self._set_status_results(

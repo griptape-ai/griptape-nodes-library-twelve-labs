@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, ClassVar
 
-from griptape_nodes.exe_types.core_types import ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, ParameterMode
 from griptape_nodes.exe_types.param_types.parameter_dict import ParameterDict
 from griptape_nodes.exe_types.param_types.parameter_float import ParameterFloat
 from griptape_nodes.exe_types.param_types.parameter_int import ParameterInt
@@ -123,14 +123,25 @@ class TwelveLabsAnalyzeVideo(GriptapeProxyNode):
 
     def validate_before_node_run(self) -> list[Exception] | None:
         exceptions = super().validate_before_node_run() or []
+        if exceptions:
+            return exceptions
 
         video_id = (self.get_parameter_value("video_id") or "").strip()
         if not video_id:
-            exceptions.append(ValueError(f"{self.name}: video_id is required."))
+            exceptions.append(
+                NodeError(
+                    "'Video ID' is required. Enter the ID of an indexed TwelveLabs video.",
+                    fields={"parameter": "video_id"},
+                )
+            )
 
         prompt = (self.get_parameter_value("prompt") or "").strip()
         if not prompt:
-            exceptions.append(ValueError(f"{self.name}: prompt is required."))
+            exceptions.append(
+                NodeError(
+                    "'Prompt' is required. Enter what you want to know about the video.", fields={"parameter": "prompt"}
+                )
+            )
 
         return exceptions if exceptions else None
 
