@@ -20,11 +20,18 @@
         "tags": [
             "Griptape",
             "AI",
-            "TwelveLabs"
+            "TwelveLabs",
+            "deprecated"
         ],
         "dependencies": {
             "pip_dependencies": []
-        }
+        },
+        "declarations": [
+            {
+                "type": "lifecycle_stage",
+                "stage": "DEPRECATED"
+            }
+        ]
     },
     "categories": [
         {
@@ -42,10 +49,22 @@
             "file_path": "twelvelabs_create_index.py",
             "metadata": {
                 "category": "video",
-                "description": "Create a TwelveLabs index and return the created index ID",
+                "description": "Deprecated: TwelveLabs sunset Pegasus 1.2. Create a TwelveLabs index and return the created index ID",
                 "display_name": "TwelveLabs Create Index",
                 "icon": "folder-plus",
-                "group": "create"
+                "group": "create",
+                "tags": [
+                    "deprecated"
+                ],
+                "deprecation": {
+                    "deprecation_message": "TwelveLabs sunset Pegasus 1.2, the only model these nodes can analyze with, and Pegasus 1.5 analyzes video without an index, which this library's index-based flow doesn't support. This library is deprecated and has no replacement node. To keep creating Marengo-only search indexes until it is removed, set Pegasus Model to empty."
+                },
+                "declarations": [
+                    {
+                        "type": "lifecycle_stage",
+                        "stage": "DEPRECATED"
+                    }
+                ]
             }
         },
         {
@@ -53,10 +72,22 @@
             "file_path": "twelvelabs_upload_asset.py",
             "metadata": {
                 "category": "video",
-                "description": "Upload a video to a TwelveLabs index and return the asset ID",
+                "description": "Deprecated: TwelveLabs sunset Pegasus 1.2. Upload a video to a TwelveLabs index and return the asset ID",
                 "display_name": "TwelveLabs Upload Asset",
                 "icon": "upload",
-                "group": "create"
+                "group": "create",
+                "tags": [
+                    "deprecated"
+                ],
+                "deprecation": {
+                    "deprecation_message": "TwelveLabs sunset Pegasus 1.2, the only model these nodes can analyze with, and Pegasus 1.5 analyzes video without an index, which this library's index-based flow doesn't support. This library is deprecated and has no replacement node."
+                },
+                "declarations": [
+                    {
+                        "type": "lifecycle_stage",
+                        "stage": "DEPRECATED"
+                    }
+                ]
             }
         },
         {
@@ -64,10 +95,22 @@
             "file_path": "twelvelabs_index_asset.py",
             "metadata": {
                 "category": "video",
-                "description": "Index an uploaded TwelveLabs asset and return the indexed video ID",
+                "description": "Deprecated: TwelveLabs sunset Pegasus 1.2. Index an uploaded TwelveLabs asset and return the indexed video ID",
                 "display_name": "TwelveLabs Index Asset",
                 "icon": "list-checks",
-                "group": "create"
+                "group": "create",
+                "tags": [
+                    "deprecated"
+                ],
+                "deprecation": {
+                    "deprecation_message": "TwelveLabs sunset Pegasus 1.2, the only model these nodes can analyze with, and Pegasus 1.5 analyzes video without an index, which this library's index-based flow doesn't support. This library is deprecated and has no replacement node."
+                },
+                "declarations": [
+                    {
+                        "type": "lifecycle_stage",
+                        "stage": "DEPRECATED"
+                    }
+                ]
             }
         },
         {
@@ -75,10 +118,22 @@
             "file_path": "twelvelabs_ingest_videos.py",
             "metadata": {
                 "category": "video",
-                "description": "Create an index, upload one or more videos, and index uploaded assets",
+                "description": "Deprecated: TwelveLabs sunset Pegasus 1.2. Create an index, upload one or more videos, and index uploaded assets",
                 "display_name": "TwelveLabs Ingest Videos",
                 "icon": "workflow",
-                "group": "create"
+                "group": "create",
+                "tags": [
+                    "deprecated"
+                ],
+                "deprecation": {
+                    "deprecation_message": "TwelveLabs sunset Pegasus 1.2, the only model these nodes can analyze with, and Pegasus 1.5 analyzes video without an index, which this library's index-based flow doesn't support. This library is deprecated and has no replacement node. To keep ingesting into Marengo-only search indexes until it is removed, set Pegasus Model to empty."
+                },
+                "declarations": [
+                    {
+                        "type": "lifecycle_stage",
+                        "stage": "DEPRECATED"
+                    }
+                ]
             }
         },
         {
@@ -86,10 +141,22 @@
             "file_path": "twelvelabs_search_index.py",
             "metadata": {
                 "category": "video",
-                "description": "Search a TwelveLabs index using text queries",
+                "description": "Deprecated: TwelveLabs sunset Pegasus 1.2. Search a TwelveLabs index using text queries",
                 "display_name": "TwelveLabs Search Index",
                 "icon": "search",
-                "group": "describe"
+                "group": "describe",
+                "tags": [
+                    "deprecated"
+                ],
+                "deprecation": {
+                    "deprecation_message": "TwelveLabs sunset Pegasus 1.2, the only model these nodes can analyze with, and Pegasus 1.5 analyzes video without an index, which this library's index-based flow doesn't support. This library is deprecated and has no replacement node."
+                },
+                "declarations": [
+                    {
+                        "type": "lifecycle_stage",
+                        "stage": "DEPRECATED"
+                    }
+                ]
             }
         },
         {
@@ -97,10 +164,22 @@
             "file_path": "twelvelabs_analyze_video.py",
             "metadata": {
                 "category": "video",
-                "description": "Run open-ended analysis for an indexed TwelveLabs video",
+                "description": "Deprecated: TwelveLabs sunset Pegasus 1.2. Run open-ended analysis for an indexed TwelveLabs video",
                 "display_name": "TwelveLabs Analyze Video",
                 "icon": "message-square-text",
-                "group": "describe"
+                "group": "describe",
+                "tags": [
+                    "deprecated"
+                ],
+                "deprecation": {
+                    "deprecation_message": "TwelveLabs sunset Pegasus 1.2, the only model these nodes can analyze with, and Pegasus 1.5 analyzes video without an index, which this library's index-based flow doesn't support. This library is deprecated and has no replacement node. This node can't analyze newly indexed videos."
+                },
+                "declarations": [
+                    {
+                        "type": "lifecycle_stage",
+                        "stage": "DEPRECATED"
+                    }
+                ]
             }
         }
     ]
