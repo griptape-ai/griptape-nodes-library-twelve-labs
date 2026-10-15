@@ -244,6 +244,81 @@ def test_unreachable_cloud_raises_a_connection_error(api_key: None, cloud: Any) 
         _run(node)
 
 
+def test_a_submit_answer_that_is_not_json_is_not_reported_as_unreachable(api_key: None, cloud: Any) -> None:
+    cloud(lambda _request: httpx.Response(200, text="<html>Gateway page</html>", headers={"x-request-id": "req-9"}))
+    node = _analyze_node()
+
+    with pytest.raises(NodeError, match="something other than JSON while submitting the request") as raised:
+        _run(node)
+
+    assert "Could not reach" not in str(raised.value)
+    assert raised.value.fields == {"status_code": 200, "request_id": "req-9"}
+    assert raised.value.response == {"body": "<html>Gateway page</html>"}
+
+
+def test_a_submit_answer_that_is_a_json_list_is_reported_as_not_an_object(api_key: None, cloud: Any) -> None:
+    cloud(lambda _request: _json(200, ["unexpected"]))
+    node = _analyze_node()
+
+    with pytest.raises(NodeError, match="something other than JSON while submitting the request"):
+        _run(node)
+
+
+def test_polling_answers_that_are_not_json_raise_after_the_last_attempt(api_key: None, cloud: Any) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return _json(200, {"generation_id": "gen-1"})
+        return httpx.Response(200, text="<html>Gateway page</html>")
+
+    seen = cloud(handler)
+    node = _analyze_node()
+
+    with pytest.raises(NodeError, match="something other than JSON while checking the generation status") as raised:
+        _run(node)
+
+    assert raised.value.fields == {"status_code": 200, "generation_id": "gen-1"}
+    assert len([r for r in seen if r.method == "GET"]) == 3
+
+
+def test_a_polling_answer_that_is_not_json_is_retried(api_key: None, cloud: Any) -> None:
+    polls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal polls
+        if request.method == "POST":
+            return _json(200, {"generation_id": "gen-1"})
+        if request.url.path.endswith("/result"):
+            return _json(200, {"answer": "ok"})
+        polls += 1
+        if polls == 1:
+            return httpx.Response(200, text="<html>Gateway page</html>")
+        return _json(200, {"status": "COMPLETED"})
+
+    cloud(handler)
+    node = _analyze_node()
+
+    _run(node)
+
+    assert polls == 2
+
+
+def test_a_result_that_claims_to_be_json_but_is_not_raises_with_the_generation_id(api_key: None, cloud: Any) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return _json(200, {"generation_id": "gen-1"})
+        if request.url.path.endswith("/result"):
+            return httpx.Response(200, text="not json", headers={"content-type": "application/json"})
+        return _json(200, {"status": "COMPLETED"})
+
+    cloud(handler)
+    node = _analyze_node()
+
+    with pytest.raises(NodeError, match="something other than JSON while fetching the generation result") as raised:
+        _run(node)
+
+    assert raised.value.fields == {"status_code": 200, "generation_id": "gen-1"}
+
+
 def test_missing_generation_id_raises_with_the_response(api_key: None, cloud: Any) -> None:
     cloud(lambda _request: _json(200, {"unexpected": True}))
     node = _analyze_node()

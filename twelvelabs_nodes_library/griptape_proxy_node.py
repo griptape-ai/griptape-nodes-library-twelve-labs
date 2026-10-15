@@ -207,6 +207,45 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
             return {"truncated_body": serialized[:MAX_RESPONSE_CHARS]}
         return {"body": text[:MAX_RESPONSE_CHARS]}
 
+    @staticmethod
+    def _response_fields(response: httpx.Response, generation_id: str | None) -> dict[str, str | int | float | bool]:
+        """The status code, request ID and generation ID that identify a response."""
+        fields: dict[str, str | int | float | bool] = {"status_code": response.status_code}
+        request_id = response.headers.get("x-request-id")
+        if request_id:
+            fields["request_id"] = request_id
+        if generation_id:
+            fields["generation_id"] = generation_id
+        return fields
+
+    def _json_object(
+        self, response: httpx.Response, *, action: str, generation_id: str | None = None
+    ) -> dict[str, Any]:
+        """Return the JSON object in a successful response, or raise a NodeError when the body is something else.
+
+        Args:
+            response: The response, which has already passed `raise_for_status`
+            action: What the node was doing, as a gerund phrase such as "submitting the request"
+            generation_id: The generation this request belongs to, when there is one
+        """
+        try:
+            parsed = response.json()
+        except ValueError as e:
+            error = self._not_json_error(response, action=action, generation_id=generation_id)
+            raise error from e
+        if not isinstance(parsed, dict):
+            raise self._not_json_error(response, action=action, generation_id=generation_id)
+        return parsed
+
+    def _not_json_error(self, response: httpx.Response, *, action: str, generation_id: str | None) -> NodeError:
+        """Build a NodeError for a successful response whose body is not a JSON object."""
+        msg = f"Griptape Cloud answered with something other than JSON while {action}. Run the node again."
+        return NodeError(
+            msg,
+            fields=self._response_fields(response, generation_id),
+            response=self._bounded_response(None, response.text),
+        )
+
     def _http_error(self, response: httpx.Response, *, action: str, generation_id: str | None = None) -> NodeError:
         """Build a NodeError from a failed Griptape Cloud HTTP response.
 
@@ -216,12 +255,7 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
             generation_id: The generation this request belongs to, when there is one
         """
         status_code = response.status_code
-        fields: dict[str, str | int | float | bool] = {"status_code": status_code}
-        request_id = response.headers.get("x-request-id")
-        if request_id:
-            fields["request_id"] = request_id
-        if generation_id:
-            fields["generation_id"] = generation_id
+        fields = self._response_fields(response, generation_id)
 
         try:
             parsed = response.json()
@@ -280,14 +314,15 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
                     request_headers["X-GTC-PROXY-AUTH-INFO"] = self._user_auth_info
                 response = await client.post(proxy_url, json=payload, headers=request_headers, timeout=60)
                 response.raise_for_status()
-                response_json = response.json()
-                self._log("Request submitted successfully")
         except httpx.HTTPStatusError as e:
             self._log(f"HTTP error: {e.response.status_code} - {e.response.text}")
             raise self._http_error(e.response, action=action) from e
         except Exception as e:
             self._log(f"Request failed: {e}")
             raise self._connection_error(e, action=action) from e
+
+        response_json = self._json_object(response, action=action)
+        self._log("Request submitted successfully")
 
         generation_id = response_json.get("generation_id")
         if generation_id:
@@ -322,7 +357,6 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
                 try:
                     response = await client.get(get_url, headers=headers, timeout=60)
                     response.raise_for_status()
-                    result_json = response.json()
                 except httpx.HTTPStatusError as e:
                     self._log(f"HTTP error while polling: {e.response.status_code} - {e.response.text}")
                     if attempt == max_attempts - 1:
@@ -332,6 +366,14 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
                     self._log(f"Error while polling: {e}")
                     if attempt == max_attempts - 1:
                         raise self._connection_error(e, action=action, generation_id=generation_id) from e
+                    continue
+
+                try:
+                    result_json = self._json_object(response, action=action, generation_id=generation_id)
+                except NodeError as e:
+                    self._log(f"Unreadable response while polling: {e}")
+                    if attempt == max_attempts - 1:
+                        raise
                     continue
 
                 status = result_json.get("status", "unknown")
@@ -395,7 +437,7 @@ class GriptapeProxyNode(SuccessFailureNode, ABC):
         content_type = response.headers.get("content-type", "").lower()
 
         if "application/json" in content_type:
-            result_json = response.json()
+            result_json = self._json_object(response, action=action, generation_id=generation_id)
             self._log("Result fetched successfully (JSON)")
             if not result_json:
                 msg = "Griptape Cloud returned an empty result. Run the node again."
