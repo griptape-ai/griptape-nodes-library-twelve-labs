@@ -10,4 +10,4 @@ the `library_version` in `twelvelabs_nodes_library/griptape_nodes_library.json`.
 
 <!-- Entries go in changelog.d/, one file each. See changelog.d/README.md. -->
 
-[Unreleased]: https://github.com/griptape-ai/griptape-nodes-library-twelve-labs/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/griptape-ai/griptape-nodes-library-twelve-labs/compare/527e66489b35fef71b47e76381f8123481cbd44f...HEAD
