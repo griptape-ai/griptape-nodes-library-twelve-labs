@@ -92,7 +92,7 @@ Inputs:
 
 | Parameter | Type | Default | Notes |
 | --- | --- | --- | --- |
-| `marengo_model_name` | string | `marengo3.0` | Optional model family for search/classification. Allowed values: `""`, `marengo3.0`, `marengo2.7`. |
+| `marengo_model_name` | string | `marengo3.0` | Required model family for search/classification. Allowed values: `marengo3.0`, `marengo2.7`. |
 | `pegasus_model_name` | string | empty | Hidden. TwelveLabs no longer indexes with Pegasus, so leave it empty. A saved `pegasus1.2` loads as empty and shows a deprecation notice. |
 | `visual` | boolean | `true` | Include visual frames in model analysis. |
 | `audio` | boolean | `true` | Include audio signals in model analysis. |
@@ -121,7 +121,6 @@ Validation rules:
 
 - `marengo_model_name` must be set, since TwelveLabs no longer indexes with Pegasus.
 - At least one of `visual` or `audio` must be enabled.
-- `addons_csv` requires a Marengo model.
 - At least one video is required.
 
 Use this node when:
@@ -140,7 +139,7 @@ Inputs:
 
 | Parameter | Type | Default | Notes |
 | --- | --- | --- | --- |
-| `marengo_model_name` | string | `marengo3.0` | Optional model family for search/classification. Allowed values: `""`, `marengo3.0`, `marengo2.7`. |
+| `marengo_model_name` | string | `marengo3.0` | Required model family for search/classification. Allowed values: `marengo3.0`, `marengo2.7`. |
 | `pegasus_model_name` | string | empty | Hidden. TwelveLabs no longer indexes with Pegasus, so leave it empty. A saved `pegasus1.2` loads as empty and shows a deprecation notice. |
 | `visual` | boolean | `true` | Include visual frames in the configured model options. |
 | `audio` | boolean | `true` | Include audio in the configured model options. |
@@ -164,7 +163,6 @@ Validation rules:
 
 - `marengo_model_name` must be set, since TwelveLabs no longer indexes with Pegasus.
 - At least one model option must be enabled.
-- `addons_csv` requires Marengo.
 
 Use this node when:
 

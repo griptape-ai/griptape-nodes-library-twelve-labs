@@ -46,12 +46,9 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
                 name="marengo_model_name",
                 type="str",
                 default_value="marengo3.0",
-                tooltip=(
-                    "Marengo embedding model family for search/classification. "
-                    "Choose one version, or leave empty to disable Marengo for this index."
-                ),
+                tooltip="Marengo embedding model family for search/classification. Required for indexing.",
                 allowed_modes={ParameterMode.INPUT, ParameterMode.PROPERTY},
-                traits={Options(choices=["", "marengo3.0", "marengo2.7"])},
+                traits={Options(choices=["marengo3.0", "marengo2.7"])},
                 ui_options={"display_name": "Marengo Model"},
             )
         )
@@ -204,8 +201,7 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
         exceptions = super().validate_before_node_run() or []
 
         marengo_model_name = (self.get_parameter_value("marengo_model_name") or "").strip()
-        pegasus_model_name = (self.get_parameter_value("pegasus_model_name") or "").strip()
-        if not any([marengo_model_name, pegasus_model_name]):
+        if not marengo_model_name:
             exceptions.append(ValueError(f"{self.name}: Select a Marengo model."))
 
         selected_options = [
@@ -214,10 +210,6 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
         ]
         if not any(selected_options):
             exceptions.append(ValueError(f"{self.name}: At least one model option must be enabled."))
-
-        addons_csv = (self.get_parameter_value("addons_csv") or "").strip()
-        if addons_csv and not marengo_model_name:
-            exceptions.append(ValueError(f"{self.name}: addons require a Marengo model to be enabled."))
 
         videos = self.get_parameter_list_value("videos")
         if len(videos) == 0:
@@ -309,16 +301,10 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
             raise ValueError(msg)
 
         marengo_model_name = (self.get_parameter_value("marengo_model_name") or "").strip()
-        pegasus_model_name = (self.get_parameter_value("pegasus_model_name") or "").strip()
-
-        models: list[dict[str, Any]] = []
-        if marengo_model_name:
-            models.append({"model_name": marengo_model_name, "model_options": model_options})
-        if pegasus_model_name:
-            models.append({"model_name": pegasus_model_name, "model_options": model_options})
-        if len(models) == 0:
-            msg = "At least one model must be enabled."
+        if not marengo_model_name:
+            msg = "Select a Marengo model."
             raise ValueError(msg)
+        models = [{"model_name": marengo_model_name, "model_options": model_options}]
 
         payload: dict[str, Any] = {
             "index_name": f"gt-index-{time.strftime('%Y%m%d')}-{uuid.uuid4().hex[:8]}",
@@ -329,9 +315,6 @@ class TwelveLabsIngestVideos(GriptapeProxyNode):
         if addons_csv:
             addons = [part.strip() for part in addons_csv.split(",") if part.strip()]
             if addons:
-                if not marengo_model_name:
-                    msg = "addons require at least one Marengo model"
-                    raise ValueError(msg)
                 payload["addons"] = addons
         return payload
 
