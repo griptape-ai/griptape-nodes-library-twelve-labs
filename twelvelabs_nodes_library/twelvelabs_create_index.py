@@ -12,8 +12,10 @@ from griptape_nodes.traits.options import Options
 
 try:
     from .griptape_proxy_node import GriptapeProxyNode
+    from .pegasus_model import add_pegasus_model_parameter, migrate_deprecated_pegasus_model
 except ImportError:
     from griptape_proxy_node import GriptapeProxyNode
+    from pegasus_model import add_pegasus_model_parameter, migrate_deprecated_pegasus_model
 
 __all__ = ["TwelveLabsCreateIndex"]
 
@@ -46,20 +48,7 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
             )
         )
 
-        self.add_parameter(
-            Parameter(
-                name="pegasus_model_name",
-                type="str",
-                default_value="pegasus1.2",
-                tooltip=(
-                    "Pegasus generative model family for contextual text output. "
-                    "Choose one version, or leave empty to disable Pegasus for this index."
-                ),
-                allowed_modes={ParameterMode.INPUT, ParameterMode.PROPERTY},
-                traits={Options(choices=["", "pegasus1.2"])},
-                ui_options={"display_name": "Pegasus Model"},
-            )
-        )
+        add_pegasus_model_parameter(self)
 
         # Available model options/modalities in TwelveLabs v1.3.
         self.add_parameter(
@@ -132,6 +121,10 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
     def _get_api_model_id(self) -> str:
         return self.MODEL_ID
 
+    def before_value_set(self, parameter: Parameter, value: Any) -> Any:
+        value = migrate_deprecated_pegasus_model(self, parameter, value)
+        return super().before_value_set(parameter, value)
+
     def validate_before_node_run(self) -> list[Exception] | None:
         exceptions = super().validate_before_node_run() or []
 
@@ -139,7 +132,7 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
         pegasus_model_name = (self.get_parameter_value("pegasus_model_name") or "").strip()
         selected_models = [marengo_model_name, pegasus_model_name]
         if not any(selected_models):
-            exceptions.append(ValueError(f"{self.name}: At least one model must be enabled."))
+            exceptions.append(ValueError(f"{self.name}: Select a Marengo model."))
 
         selected_options = [
             bool(self.get_parameter_value("visual")),
