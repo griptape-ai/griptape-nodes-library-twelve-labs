@@ -12,8 +12,10 @@ from griptape_nodes.traits.options import Options
 
 try:
     from .griptape_proxy_node import GriptapeProxyNode
+    from .pegasus_model import add_pegasus_model_parameter, migrate_deprecated_pegasus_model
 except ImportError:
     from griptape_proxy_node import GriptapeProxyNode
+    from pegasus_model import add_pegasus_model_parameter, migrate_deprecated_pegasus_model
 
 __all__ = ["TwelveLabsCreateIndex"]
 
@@ -36,30 +38,14 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
                 name="marengo_model_name",
                 type="str",
                 default_value="marengo3.0",
-                tooltip=(
-                    "Marengo embedding model family for search/classification. "
-                    "Choose one version, or leave empty to disable Marengo for this index."
-                ),
+                tooltip="Marengo embedding model family for search/classification. Required for indexing.",
                 allowed_modes={ParameterMode.INPUT, ParameterMode.PROPERTY},
-                traits={Options(choices=["", "marengo3.0", "marengo2.7"])},
+                traits={Options(choices=["marengo3.0", "marengo2.7"])},
                 ui_options={"display_name": "Marengo Model"},
             )
         )
 
-        self.add_parameter(
-            Parameter(
-                name="pegasus_model_name",
-                type="str",
-                default_value="pegasus1.2",
-                tooltip=(
-                    "Pegasus generative model family for contextual text output. "
-                    "Choose one version, or leave empty to disable Pegasus for this index."
-                ),
-                allowed_modes={ParameterMode.INPUT, ParameterMode.PROPERTY},
-                traits={Options(choices=["", "pegasus1.2"])},
-                ui_options={"display_name": "Pegasus Model"},
-            )
-        )
+        add_pegasus_model_parameter(self)
 
         # Available model options/modalities in TwelveLabs v1.3.
         self.add_parameter(
@@ -132,14 +118,16 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
     def _get_api_model_id(self) -> str:
         return self.MODEL_ID
 
+    def before_value_set(self, parameter: Parameter, value: Any) -> Any:
+        value = migrate_deprecated_pegasus_model(self, parameter, value)
+        return super().before_value_set(parameter, value)
+
     def validate_before_node_run(self) -> list[Exception] | None:
         exceptions = super().validate_before_node_run() or []
 
         marengo_model_name = (self.get_parameter_value("marengo_model_name") or "").strip()
-        pegasus_model_name = (self.get_parameter_value("pegasus_model_name") or "").strip()
-        selected_models = [marengo_model_name, pegasus_model_name]
-        if not any(selected_models):
-            exceptions.append(ValueError(f"{self.name}: At least one model must be enabled."))
+        if not marengo_model_name:
+            exceptions.append(ValueError(f"{self.name}: Select a Marengo model."))
 
         selected_options = [
             bool(self.get_parameter_value("visual")),
@@ -147,11 +135,6 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
         ]
         if not any(selected_options):
             exceptions.append(ValueError(f"{self.name}: At least one model option must be enabled."))
-
-        addons_csv = (self.get_parameter_value("addons_csv") or "").strip()
-        marengo_enabled = bool(marengo_model_name)
-        if addons_csv and not marengo_enabled:
-            exceptions.append(ValueError(f"{self.name}: addons require a Marengo model to be enabled."))
 
         return exceptions if exceptions else None
 
@@ -167,17 +150,10 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
             raise ValueError(msg)
 
         marengo_model_name = (self.get_parameter_value("marengo_model_name") or "").strip()
-        pegasus_model_name = (self.get_parameter_value("pegasus_model_name") or "").strip()
-
-        models: list[dict[str, Any]] = []
-        if marengo_model_name:
-            models.append({"model_name": marengo_model_name, "model_options": model_options})
-        if pegasus_model_name:
-            models.append({"model_name": pegasus_model_name, "model_options": model_options})
-
-        if not models:
-            msg = "At least one model must be enabled."
+        if not marengo_model_name:
+            msg = "Select a Marengo model."
             raise ValueError(msg)
+        models = [{"model_name": marengo_model_name, "model_options": model_options}]
 
         # Keep index names unique to avoid collisions while avoiding exposing this field in the node API.
         index_name = f"gt-index-{time.strftime('%Y%m%d')}-{uuid.uuid4().hex[:8]}"
@@ -191,10 +167,6 @@ class TwelveLabsCreateIndex(GriptapeProxyNode):
         if addons_csv:
             addons = [part.strip() for part in addons_csv.split(",") if part.strip()]
             if addons:
-                marengo_enabled = any(m["model_name"].startswith("marengo") for m in models)
-                if not marengo_enabled:
-                    msg = "addons require at least one Marengo model"
-                    raise ValueError(msg)
                 payload["addons"] = addons
 
         return payload
