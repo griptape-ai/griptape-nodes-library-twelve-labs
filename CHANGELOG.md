@@ -28,5 +28,13 @@ the `library_version` in `twelvelabs_nodes_library/griptape_nodes_library.json`.
   when a node runs, and a missing input names the parameter by its label.
   [#5](https://github.com/griptape-ai/griptape-nodes-library-twelve-labs/issues/5)
 
+### Deprecated
+
+- TwelveLabs Create Index and TwelveLabs Ingest Videos no longer offer `pegasus1.2`, which
+  TwelveLabs has sunset for indexing. Pegasus Model is hidden and empty by default, so new indexes
+  use Marengo only, and Marengo Model can no longer be left empty. A saved workflow that selected `pegasus1.2` loads with Pegasus disabled and
+  shows a notice asking you to save it.
+  [#7](https://github.com/griptape-ai/griptape-nodes-library-twelve-labs/issues/7)
+
 [Unreleased]: https://github.com/griptape-ai/griptape-nodes-library-twelve-labs/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/griptape-ai/griptape-nodes-library-twelve-labs/compare/527e66489b35fef71b47e76381f8123481cbd44f...v0.2.0

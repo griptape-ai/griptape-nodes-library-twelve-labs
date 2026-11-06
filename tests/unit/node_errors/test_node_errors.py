@@ -294,3 +294,13 @@ def test_ingest_step_is_attached_to_a_failure(monkeypatch: pytest.MonkeyPatch, c
     with pytest.raises(NodeError) as caught:
         asyncio.run(node._run_proxy_operation(api_model_id="m", payload={}, headers={}, step_label="create index"))
     assert caught.value.fields["step"] == "create index"
+
+
+@pytest.mark.parametrize("module_name", ["twelvelabs_create_index", "twelvelabs_ingest_videos"])
+def test_marengo_model_is_required(module_name: str, set_key) -> None:
+    node = load_node_class(module_name)(name="node")
+    node.parameter_values["marengo_model_name"] = ""  # the dropdown no longer offers an empty choice
+    errors = [e for e in node.validate_before_node_run() or [] if isinstance(e, NodeError)]
+    marengo = [e for e in errors if e.fields.get("parameter") == "marengo_model_name"]
+    assert len(marengo) == 1
+    assert str(marengo[0]) == "No Marengo model is selected. Choose one in 'Marengo Model'."
