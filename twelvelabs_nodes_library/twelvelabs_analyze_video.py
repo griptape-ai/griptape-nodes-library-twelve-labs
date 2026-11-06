@@ -123,14 +123,18 @@ class TwelveLabsAnalyzeVideo(GriptapeProxyNode):
 
     def validate_before_node_run(self) -> list[Exception] | None:
         exceptions = super().validate_before_node_run() or []
+        if exceptions:
+            return exceptions
 
         video_id = (self.get_parameter_value("video_id") or "").strip()
         if not video_id:
-            exceptions.append(ValueError(f"{self.name}: video_id is required."))
+            exceptions.append(
+                self._input_error("'Video ID' is required. Enter an indexed TwelveLabs video ID.", "video_id")
+            )
 
         prompt = (self.get_parameter_value("prompt") or "").strip()
         if not prompt:
-            exceptions.append(ValueError(f"{self.name}: prompt is required."))
+            exceptions.append(self._input_error("'Prompt' is empty. Enter a prompt or connect one to it.", "prompt"))
 
         return exceptions if exceptions else None
 

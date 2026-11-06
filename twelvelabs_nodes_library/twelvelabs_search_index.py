@@ -118,18 +118,28 @@ class TwelveLabsSearchIndex(GriptapeProxyNode):
 
     def validate_before_node_run(self) -> list[Exception] | None:
         exceptions = super().validate_before_node_run() or []
+        if exceptions:
+            return exceptions
 
         index_id = (self.get_parameter_value("index_id") or "").strip()
         if not index_id:
-            exceptions.append(ValueError(f"{self.name}: index_id is required."))
+            exceptions.append(
+                self._input_error("'Index ID' is required. Enter the ID of the TwelveLabs index to search.", "index_id")
+            )
 
         query_text = (self.get_parameter_value("query_text") or "").strip()
         if not query_text:
-            exceptions.append(ValueError(f"{self.name}: query_text is required."))
+            exceptions.append(
+                self._input_error("'Query' is empty. Enter a search query or connect one to it.", "query_text")
+            )
 
         search_options_csv = (self.get_parameter_value("search_options_csv") or "").strip()
         if not search_options_csv:
-            exceptions.append(ValueError(f"{self.name}: search_options_csv is required."))
+            exceptions.append(
+                self._input_error(
+                    "'Search Options (CSV)' is empty. Enter at least one option, such as visual.", "search_options_csv"
+                )
+            )
 
         return exceptions if exceptions else None
 
